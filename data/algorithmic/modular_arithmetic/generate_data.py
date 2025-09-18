@@ -104,7 +104,7 @@ def save_dataset(
     """Save dataset to files with metadata"""
     output_path = Path(output_dir)
     # create a subdirectory named by prime and operation (e.g. "./modular_arithmetic_data/prime_97_addition")
-    subdir = f"prime_{config['prime']}_{config['operation']}"
+    subdir = f"prime_{config['prime']}_{config['operation']}_trainfrac_{config['train_fraction']}"
     output_path = output_path / subdir
     output_path.mkdir(parents=True, exist_ok=True)
     
