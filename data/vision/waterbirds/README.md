@@ -30,17 +30,32 @@ The standard Waterbirds dataset can be obtained from:
 
 ### Dataset Setup
 ```bash
-# Download and setup original Waterbirds dataset
+# Method 1: Use our compatible generation script
+# First, download the required datasets:
+# - CUB-200-2011: http://www.vision.caltech.edu/visipedia/CUB-200-2011.html
+# - CUB-200-2011 Segmentations: http://www.vision.caltech.edu/visipedia/CUB-200-2011.html  
+# - Places365: http://places2.csail.mit.edu/download.html
+
+# Generate Waterbirds dataset with our script
+python data/vision/waterbirds/generate_waterbirds.py \
+    --cub_dir ./CUB-200-2011 \
+    --cub_seg_dir ./CUB-200-2011_segmentations \
+    --places_dir ./places365_standard \
+    --output_dir ./waterbirds_data \
+    --confounder_strength 0.95
+
+# Method 2: Download pre-generated Waterbirds dataset
 git clone https://github.com/kohpangwei/group_DRO.git
 cd group_DRO
 python scripts/download_waterbirds.py --root_dir ./data
 
 # The dataset will be organized as:
-# waterbirds/
-# ├── train/
-# ├── val/  
-# ├── test/
-# └── metadata.csv
+# waterbirds_data/
+# └── waterbird_complete95_forest2water2/
+#     ├── train/
+#     ├── val/  
+#     ├── test/
+#     └── metadata.csv
 ```
 
 ## 📊 Dataset Statistics
