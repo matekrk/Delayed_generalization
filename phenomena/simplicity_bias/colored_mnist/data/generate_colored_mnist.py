@@ -236,6 +236,10 @@ def save_colored_mnist_dataset(
     """Save colored MNIST dataset to files"""
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
+
+    # Save dataset with subdir
+    subdir = f"traincorr_{metadata['train_correlation']}_testcorr_{metadata['test_correlation']}"
+    output_path = output_path / subdir
     
     # Save datasets using torch.save for efficiency
     torch.save(train_dataset, output_path / "train_dataset.pt")
