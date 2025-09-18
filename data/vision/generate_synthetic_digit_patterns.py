@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Synthetic Colored MNIST Dataset Generator for Simplicity Bias Research
+Synthetic Digit Pattern Generator for Simplicity Bias Research
 
-This script generates synthetic colored digit-like datasets where color correlates 
+This script generates synthetic digit-like pattern datasets where color correlates 
 with class label in training data but not in test data, to study simplicity bias.
-Since we don't have internet access, this creates synthetic digit-like patterns.
+This creates synthetic geometric patterns that resemble digits rather than using real MNIST.
 
 Usage:
-    python generate_synthetic_colored_digits.py --train_correlation 0.9 --test_correlation 0.1
+    python generate_synthetic_digit_patterns.py --train_correlation 0.9 --test_correlation 0.1
 """
 
 import argparse
