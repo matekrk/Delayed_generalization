@@ -1,6 +1,6 @@
-# Datasets for Delayed Generalization Research
+# Data for Delayed Generalization Research
 
-This directory contains documentation and resources for datasets commonly used to study delayed generalization phenomena.
+This directory contains documentation and resources for data commonly used to study delayed generalization phenomena.
 
 ## 📊 Dataset Categories
 
@@ -27,7 +27,7 @@ Natural language processing tasks with delayed generalization patterns
 
 ## 🎯 Selection Criteria
 
-When choosing datasets for delayed generalization research, consider:
+When choosing data for delayed generalization research, consider:
 
 ### Clear Delayed Patterns
 - Observable gap between train and test performance

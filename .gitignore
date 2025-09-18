@@ -26,8 +26,8 @@ MANIFEST
 *.pt
 
 # Data directories
-*_data/
-data/
+*_data_dir/
+data_dir/
 
 # Experiment outputs
 experiments/

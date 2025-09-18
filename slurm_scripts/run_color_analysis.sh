@@ -26,14 +26,14 @@ mkdir -p results/color_analysis
 
 # Run CIFAR-100 color analysis
 echo "Running CIFAR-100 color analysis..."
-python -m datasets.vision.cifar100_analysis \
+python -m data.vision.cifar100_analysis \
     --root data/cifar100 \
     --cache_dir results/color_analysis/cifar100 \
     --download
 
 # Run TinyImageNet color analysis
 echo "Running TinyImageNet color analysis..."
-python -m datasets.vision.tinyimagenet_analysis \
+python -m data.vision.tinyimagenet_analysis \
     --root data/tinyimagenet \
     --cache_dir results/color_analysis/tinyimagenet \
     --download

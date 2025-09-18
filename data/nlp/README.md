@@ -488,7 +488,7 @@ def analyze_learning_progression(training_logs):
 ### Hugging Face Integration
 ```python
 from transformers import Trainer, TrainingArguments
-from datasets import Dataset
+from data import Dataset
 
 def create_hf_dataset(data, tokenizer, max_length=128):
     """Convert to Hugging Face Dataset format"""

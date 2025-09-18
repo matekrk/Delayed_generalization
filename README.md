@@ -41,7 +41,7 @@ delayed_generalization/
 │   ├── simplicity_bias/
 │   ├── phase_transitions/
 │   └── robustness/     # NEW: Robustness evaluation including adversarial attacks
-├── datasets/           # Datasets known for delayed generalization
+├── data/           # Datasets known for delayed generalization
 │   ├── algorithmic/
 │   ├── vision/         # NEW: Includes CIFAR-100 and TinyImageNet analysis
 │   ├── nlp/
@@ -68,7 +68,7 @@ delayed_generalization/
 Browse the [catalog of scenarios](./CATALOG.md) or explore specific categories:
 
 - **[Phenomena](./phenomena/)**: Types of delayed generalization
-- **[Datasets](./datasets/)**: Datasets exhibiting these phenomena  
+- **[Data](./data/)**: Datasets exhibiting these phenomena  
 - **[Models](./models/)**: Architectures prone to delayed generalization
 - **[Optimization](./optimization/)**: Training techniques and hyperparameters
 - **[Data Attribution](./data_attribution/)**: TRAK and GradCAM for model understanding
@@ -81,8 +81,8 @@ Browse the [catalog of scenarios](./CATALOG.md) or explore specific categories:
 ### Color Analysis for Bias Detection
 ```python
 from utils.image_analysis import analyze_image_colors
-from datasets.vision.cifar100_analysis import analyze_cifar100_colors
-from datasets.vision.tinyimagenet_analysis import analyze_tinyimagenet_colors
+from data.vision.cifar100_analysis import analyze_cifar100_colors
+from data.vision.tinyimagenet_analysis import analyze_tinyimagenet_colors
 
 # Analyze CIFAR-100 for color bias
 results = analyze_cifar100_colors(root="./data", download=True)

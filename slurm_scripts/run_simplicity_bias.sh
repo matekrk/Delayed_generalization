@@ -26,7 +26,7 @@ mkdir -p results/simplicity_bias_experiments
 
 # Generate colored MNIST dataset
 echo "Generating colored MNIST dataset..."
-python -m datasets.vision.generate_colored_mnist \
+python -m data.vision.generate_colored_mnist \
     --train_correlation 0.9 \
     --test_correlation 0.1 \
     --output_dir data/colored_mnist \

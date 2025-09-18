@@ -8,7 +8,7 @@ This document summarizes the implementation of delayed generalization phenomena 
 **Location**: `phenomena/grokking/`
 
 - **Data Generation**: ✅ Complete modular arithmetic dataset generator
-  - `datasets/algorithmic/modular_arithmetic/generate_data.py`
+  - `data/algorithmic/modular_arithmetic/generate_data.py`
   - Supports modular addition, subtraction, multiplication
   - Configurable prime numbers (97, 113, etc.)
   - Train/test split with proper tokenization

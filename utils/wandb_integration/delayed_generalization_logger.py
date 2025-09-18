@@ -59,7 +59,8 @@ class DelayedGeneralizationLogger:
             config=config,
             tags=tags or [phenomenon_type],
             notes=notes,
-            save_code=save_code
+            save_code=save_code,
+            dir=config.get('save_dir', './wandb')
         )
         
         # Metrics storage for analysis

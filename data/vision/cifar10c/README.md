@@ -309,7 +309,7 @@ def validate_synthetic_corruptions(synthetic_data, real_data):
 ## 🔗 Integration Example
 
 ```python
-from datasets.vision.cifar10c.generate_synthetic_cifar10c import SyntheticCIFAR10C
+from data.vision.cifar10c.generate_synthetic_cifar10c import SyntheticCIFAR10C
 
 # Create progressive corruption dataset
 dataset = SyntheticCIFAR10C(

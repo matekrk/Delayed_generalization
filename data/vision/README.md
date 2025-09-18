@@ -70,8 +70,8 @@ python generate_synthetic_cifar10c.py --corruption_types noise blur
 ### Integration with Training
 ```python
 # Example integration
-from datasets.vision.colored_mnist.generate_colored_mnist import ColoredMNISTDataset
-from datasets.vision.celeba.generate_synthetic_celeba import SyntheticCelebADataset
+from data.vision.colored_mnist.generate_colored_mnist import ColoredMNISTDataset
+from data.vision.celeba.generate_synthetic_celeba import SyntheticCelebADataset
 
 # Create biased datasets
 train_dataset = ColoredMNISTDataset(

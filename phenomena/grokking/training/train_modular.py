@@ -28,7 +28,18 @@ sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from models.simple_transformer import create_grokking_model
-from datasets.algorithmic.modular_arithmetic.generate_data import load_dataset
+# Robust import for the dataset loader: try the expected package path first,
+# then ensure the repository root is on sys.path and try again, then fall back
+# to an alternative nested package name used in some layouts.
+try:
+    from data.algorithmic.modular_arithmetic.generate_data import load_dataset
+except Exception:
+    try:
+        repo_root = Path(__file__).resolve().parents[3]
+        sys.path.append(str(repo_root))
+        from data.algorithmic.modular_arithmetic.generate_data import load_dataset
+    except Exception:
+        from data.grokking.datasets.algorithmic.modular_arithmetic.generate_data import load_dataset
 
 
 class GrokkingTrainer:

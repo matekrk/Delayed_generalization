@@ -10,7 +10,7 @@ Generate data and train a transformer model:
 
 ```bash
 # Generate modular arithmetic dataset
-python datasets/algorithmic/modular_arithmetic/generate_data.py \
+python data/algorithmic/modular_arithmetic/generate_data.py \
     --prime 97 --operation addition --output_dir ./grok_data
 
 # Train transformer (may take hours for grokking to occur)
