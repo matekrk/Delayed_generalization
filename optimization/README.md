@@ -23,12 +23,29 @@ Various regularization techniques influence memorization vs generalization timin
 - **Weight Decay**: Critical for grokking, affects simplicity bias
 - **Dropout**: Can delay overfitting and promote robust features
 - **Data Augmentation**: Breaks spurious correlations early in training
+- **Spectral Normalization**: Controls model capacity and learning dynamics
 
+### [Learning Rate Schedules](./scheduling/)
 ### [Learning Rate Schedules](./scheduling/)
 LR scheduling affects the speed and quality of different learning phases
 - **Cosine Annealing**: Smooth transitions between learning phases
 - **Step Decay**: Can trigger sudden improvements in generalization  
 - **Cyclic Learning**: Multiple opportunities for phase transitions
+- **Adaptive Schedules**: Respond to training dynamics and phase transitions
+
+### [Momentum and Adaptive Optimizers](./momentum_adaptive/)
+Optimizer choice significantly impacts delayed generalization patterns
+- **SGD with Momentum**: Often better for final generalization quality
+- **AdamW**: Faster initial progress, requires careful weight decay tuning
+- **Adaptive Methods**: Good for exploration, may need transitions to SGD
+- **Lookahead**: Combines benefits of different optimization approaches
+
+### [Batch Size Strategies](./batch_strategies/)
+Batch size influences noise levels and exploration capabilities
+- **Progressive Scaling**: Start small for exploration, increase for efficiency
+- **Adaptive Sizing**: Adjust based on training dynamics and memory
+- **Phase-Specific**: Different batch sizes for different training phases
+- **Gradient Accumulation**: Simulate large batches with limited memory
 
 ## 🎯 Optimization for Specific Phenomena
 
