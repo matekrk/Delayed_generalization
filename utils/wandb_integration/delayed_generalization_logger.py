@@ -69,7 +69,8 @@ class DelayedGeneralizationLogger:
             'test_loss': [],
             'train_acc': [],
             'test_acc': [],
-            'epochs': []
+            'epochs': [],
+            'generalization_gap': []  # Add this to base metrics
         }
         
         # Phenomenon-specific metrics
@@ -637,6 +638,16 @@ class DelayedGeneralizationLogger:
             summary['total_abilities_tracked'] = len(final_abilities)
         
         return summary
+    
+    def log_metrics(self, metrics: Dict[str, Any], step: Optional[int] = None):
+        """
+        Log metrics to wandb. This is a general-purpose logging method.
+        
+        Args:
+            metrics: Dictionary of metrics to log
+            step: Optional step number for the metrics
+        """
+        wandb.log(metrics, step=step)
     
     def finish(self):
         """Finish the wandb run."""

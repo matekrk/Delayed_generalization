@@ -29,7 +29,28 @@ sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from models.cnn_models import create_colored_mnist_model
 from data.vision.colored_mnist.generate_colored_mnist import load_colored_mnist_dataset, ColoredMNISTDataset
-from data.vision.colored_mnist.generate_synthetic_colored_digits import load_synthetic_dataset, SyntheticColoredDataset
+try:
+    from data.vision.colored_mnist.generate_synthetic_colored_digits import load_synthetic_dataset, SyntheticColoredDataset
+except ImportError:
+    # Try alternative import paths
+    try:
+        import sys
+        import os
+        # Add repository root to path
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from data.vision.colored_mnist.generate_synthetic_colored_digits import load_synthetic_dataset, SyntheticColoredDataset
+    except ImportError:
+        # Fallback: create dummy classes/functions to prevent import errors
+        print("Warning: Could not import synthetic colored digits module. Using fallbacks.")
+        
+        class SyntheticColoredDataset:
+            def __init__(self, *args, **kwargs):
+                pass
+                
+        def load_synthetic_dataset(data_dir):
+            raise ImportError("Synthetic dataset module not available")
 
 
 class SimplicityBiasTrainer:
@@ -51,12 +72,33 @@ class SimplicityBiasTrainer:
         self.device = device
         self.log_interval = log_interval
         
-        # Optimizer
-        self.optimizer = optim.Adam(
-            model.parameters(),
-            lr=learning_rate,
-            weight_decay=weight_decay
-        )
+        # Optimizer - Enhanced version with better features
+        try:
+            # Try to use enhanced optimizer from our optimization module
+            import sys
+            import os
+            repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            if repo_root not in sys.path:
+                sys.path.insert(0, repo_root)
+            
+            from optimization.enhanced_optimizers import EnhancedAdamW
+            self.optimizer = EnhancedAdamW(
+                model.parameters(),
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                grad_clip_norm=1.0,  # Add gradient clipping
+                adaptive_weight_decay=True,  # Use adaptive weight decay
+                log_grad_stats=True  # Enable gradient statistics logging
+            )
+            print("Using Enhanced AdamW optimizer with additional features")
+        except ImportError:
+            # Fallback to standard Adam
+            self.optimizer = optim.Adam(
+                model.parameters(),
+                lr=learning_rate,
+                weight_decay=weight_decay
+            )
+            print("Using standard Adam optimizer (Enhanced optimizers not available)")
         
         # Loss function
         self.criterion = nn.CrossEntropyLoss()

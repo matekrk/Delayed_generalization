@@ -47,3 +47,6 @@ wandb/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test files (for validation only)
+test_fixes.py
