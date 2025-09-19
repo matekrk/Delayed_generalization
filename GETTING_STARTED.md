@@ -24,8 +24,8 @@ Study background bias in bird classification:
 
 ```bash
 # Generate synthetic waterbirds dataset
-python phenomena/simplicity_bias/waterbirds/data/generate_synthetic_waterbirds.py \
-    --train_correlation 0.9 --test_correlation 0.1 --output_dir ./waterbirds_data
+python data/vision/waterbirds/generate_waterbirds.py \
+    --train_correlation 0.9 --test_correlation 0.5 --output_dir ./waterbirds_data
 
 # Train with standard ERM
 python phenomena/simplicity_bias/waterbirds/training/train_waterbirds.py \
@@ -42,7 +42,7 @@ Study color vs shape learning:
 
 ```bash
 # Generate colored MNIST dataset
-python phenomena/simplicity_bias/colored_mnist/data/generate_colored_mnist.py \
+python data/vision/colored_mnist/generate_colored_mnist.py \
     --train_correlation 0.9 --test_correlation 0.1 --output_dir ./colored_mnist_data
 
 # Train CNN model
@@ -56,8 +56,8 @@ Study background bias in gender classification:
 
 ```bash
 # Generate synthetic CelebA dataset
-python phenomena/simplicity_bias/celeba/data/generate_synthetic_celeba.py \
-    --train_bias 0.8 --test_bias 0.2 --output_dir ./celeba_data
+python data/vision/generate_synthetic_celeba.py \
+    --train_bias 0.8 --test_bias 0.5 --output_dir ./celeba_data
 
 # Train CNN model
 python phenomena/simplicity_bias/celeba/training/train_celeba.py \
@@ -70,7 +70,7 @@ Study clean vs corrupted image classification:
 
 ```bash
 # Generate synthetic CIFAR-10-C dataset
-python phenomena/robustness/cifar10c/data/generate_synthetic_cifar10c.py \
+python data/vision/cifar10c/generate_synthetic_cifar10c.py \
     --train_corruptions gaussian_noise motion_blur \
     --test_corruptions fog brightness --output_dir ./cifar10c_data
 

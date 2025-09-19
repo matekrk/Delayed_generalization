@@ -26,7 +26,7 @@ from typing import Dict, Tuple, List, Optional
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from data.generate_synthetic_cifar10c import load_synthetic_cifar10c_dataset
+from data.cifar10c.generate_synthetic_cifar10c import load_synthetic_cifar10c_dataset
 
 
 class CIFAR10CModel(nn.Module):

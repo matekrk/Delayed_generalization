@@ -28,11 +28,11 @@ sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from models.cnn_models import create_colored_mnist_model
-from data.generate_colored_mnist import load_colored_mnist_dataset, ColoredMNISTDataset
-from data.generate_synthetic_colored_digits import load_synthetic_dataset, SyntheticColoredDataset
+from data.vision.colored_mnist.generate_colored_mnist import load_colored_mnist_dataset, ColoredMNISTDataset
+from data.vision.colored_mnist.generate_synthetic_colored_digits import load_synthetic_dataset, SyntheticColoredDataset
 
 
-class SimplicitybIasTrainer:
+class SimplicityBiasTrainer:
     """Trainer for colored MNIST simplicity bias experiments"""
     
     def __init__(
@@ -374,7 +374,7 @@ def main():
     model = create_colored_mnist_model(args.model_type, **model_kwargs)
     
     # Create trainer
-    trainer = SimplicitybIasTrainer(
+    trainer = SimplicityBiasTrainer(
         model=model,
         train_loader=train_loader,
         test_loader=test_loader,
