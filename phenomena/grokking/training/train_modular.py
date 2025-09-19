@@ -64,12 +64,33 @@ class GrokkingTrainer:
         self.log_interval = log_interval
         self.wandb_logger = wandb_logger
         
-        # Optimizer - weight decay is crucial for grokking!
-        self.optimizer = optim.AdamW(
-            model.parameters(),
-            lr=learning_rate,
-            weight_decay=weight_decay
-        )
+        # Optimizer - Enhanced AdamW with better features for grokking
+        try:
+            # Try to use enhanced optimizer
+            import sys
+            import os
+            repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            if repo_root not in sys.path:
+                sys.path.insert(0, repo_root)
+            
+            from optimization.enhanced_optimizers import EnhancedAdamW
+            self.optimizer = EnhancedAdamW(
+                model.parameters(),
+                lr=learning_rate,
+                weight_decay=weight_decay,
+                grad_clip_norm=1.0,  # Gradient clipping for stability
+                adaptive_weight_decay=False,  # Keep weight decay constant for grokking
+                log_grad_stats=True  # Enable gradient statistics
+            )
+            print("Using Enhanced AdamW optimizer for grokking")
+        except ImportError:
+            # Fallback to standard AdamW - weight decay is crucial for grokking!
+            self.optimizer = optim.AdamW(
+                model.parameters(),
+                lr=learning_rate,
+                weight_decay=weight_decay
+            )
+            print("Using standard AdamW optimizer")
         
         # Loss function
         self.criterion = nn.CrossEntropyLoss()
