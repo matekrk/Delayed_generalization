@@ -30,19 +30,42 @@ class ColoredMNISTDataset(Dataset):
         mnist_data: torch.utils.data.Dataset,
         correlation: float,
         colors: List[Tuple[float, float, float]] = None,
-        seed: int = 42
+        seed: int = 42,
+        coloring_mode: str = "full_image",  # "full_image", "background_only", "digit_only"
+        use_all_colors: bool = False  # If True, use 10 colors for 10 digits
     ):
         self.mnist_data = mnist_data
         self.correlation = correlation
+        self.coloring_mode = coloring_mode
+        self.use_all_colors = use_all_colors
         
-        # Default color scheme: red and green
-        if colors is None:
-            self.colors = [
-                (1.0, 0.0, 0.0),  # Red
-                (0.0, 1.0, 0.0),  # Green
-            ]
+        # Define color schemes
+        if use_all_colors:
+            # 10 distinct colors for 10 digits
+            if colors is None:
+                self.colors = [
+                    (1.0, 0.0, 0.0),  # Red (0)
+                    (0.0, 1.0, 0.0),  # Green (1)
+                    (0.0, 0.0, 1.0),  # Blue (2)
+                    (1.0, 1.0, 0.0),  # Yellow (3)
+                    (1.0, 0.0, 1.0),  # Magenta (4)
+                    (0.0, 1.0, 1.0),  # Cyan (5)
+                    (1.0, 0.5, 0.0),  # Orange (6)
+                    (0.5, 0.0, 1.0),  # Purple (7)
+                    (1.0, 0.75, 0.8), # Pink (8)
+                    (0.5, 0.5, 0.5),  # Gray (9)
+                ]
+            else:
+                self.colors = colors
         else:
-            self.colors = colors
+            # Default binary color scheme: red and green
+            if colors is None:
+                self.colors = [
+                    (1.0, 0.0, 0.0),  # Red
+                    (0.0, 1.0, 0.0),  # Green
+                ]
+            else:
+                self.colors = colors
         
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -59,11 +82,22 @@ class ColoredMNISTDataset(Dataset):
             
             # Determine if this sample follows the correlation
             if np.random.random() < self.correlation:
-                # Correlated: even digits -> color 0, odd digits -> color 1
-                color_idx = label % 2
+                if self.use_all_colors:
+                    # Correlated: each digit gets its designated color
+                    color_idx = label
+                else:
+                    # Correlated: even digits -> color 0, odd digits -> color 1
+                    color_idx = label % 2
             else:
                 # Anti-correlated: random color assignment
-                color_idx = np.random.randint(0, len(self.colors))
+                if self.use_all_colors:
+                    # Random color that's not the designated one
+                    possible_colors = list(range(10))
+                    possible_colors.remove(label)
+                    color_idx = np.random.choice(possible_colors)
+                else:
+                    # Random color assignment
+                    color_idx = np.random.randint(0, len(self.colors))
             
             self.color_assignments.append(color_idx)
     
@@ -77,18 +111,48 @@ class ColoredMNISTDataset(Dataset):
         if image.shape[0] == 1:  # [1, H, W]
             image = image.repeat(3, 1, 1)  # [3, H, W]
         
-        # Apply color
+        # Apply color based on coloring mode
         color_idx = self.color_assignments[idx]
         color = torch.tensor(self.colors[color_idx], dtype=torch.float32).view(3, 1, 1)
         
-        # Colorize the image
-        colored_image = image * color
+        if self.coloring_mode == "full_image":
+            # Original behavior: colorize entire image
+            colored_image = image * color
+        elif self.coloring_mode == "background_only":
+            # Colorize only the background (non-digit areas)
+            # Create mask for digit (pixels > threshold are considered digit)
+            digit_mask = (image[0] > 0.1).float()  # Use first channel for mask
+            background_mask = 1.0 - digit_mask
+            
+            # Apply color to background, keep digit grayscale
+            colored_image = image.clone()
+            for c in range(3):
+                colored_image[c] = image[c] * digit_mask + (background_mask * color[c, 0, 0])
+                
+        elif self.coloring_mode == "digit_only":
+            # Colorize only the digit areas
+            # Create mask for digit
+            digit_mask = (image[0] > 0.1).float()
+            
+            # Apply color to digit, keep background black
+            colored_image = torch.zeros_like(image)
+            for c in range(3):
+                colored_image[c] = image[c] * digit_mask * color[c, 0, 0]
+        else:
+            raise ValueError(f"Unknown coloring_mode: {self.coloring_mode}")
         
         # Metadata for analysis
+        if self.use_all_colors:
+            correlation_followed = (label == color_idx)
+        else:
+            correlation_followed = (label % 2) == color_idx
+            
         metadata = {
             'color_idx': color_idx,
-            'correlation_followed': (label % 2) == color_idx,
-            'original_label': label
+            'correlation_followed': correlation_followed,
+            'original_label': label,
+            'coloring_mode': self.coloring_mode,
+            'use_all_colors': self.use_all_colors
         }
         
         return colored_image, label, metadata
@@ -99,7 +163,9 @@ def create_colored_mnist_datasets(
     test_correlation: float = 0.1,
     data_dir: str = "./data",
     colors: List[Tuple[float, float, float]] = None,
-    seed: int = 42
+    seed: int = 42,
+    coloring_mode: str = "full_image",
+    use_all_colors: bool = False
 ) -> Tuple[ColoredMNISTDataset, ColoredMNISTDataset, Dict]:
     """
     Create colored MNIST train and test datasets
@@ -110,6 +176,8 @@ def create_colored_mnist_datasets(
         data_dir: Directory to store MNIST data
         colors: List of RGB color tuples
         seed: Random seed
+        coloring_mode: How to apply colors ("full_image", "background_only", "digit_only")
+        use_all_colors: If True, use 10 colors for 10 digits instead of binary
         
     Returns:
         train_dataset, test_dataset, metadata
@@ -131,22 +199,26 @@ def create_colored_mnist_datasets(
     
     # Create colored versions
     train_dataset = ColoredMNISTDataset(
-        mnist_train, train_correlation, colors, seed
+        mnist_train, train_correlation, colors, seed, coloring_mode, use_all_colors
     )
     
     test_dataset = ColoredMNISTDataset(
-        mnist_test, test_correlation, colors, seed + 1
+        mnist_test, test_correlation, colors, seed + 1, coloring_mode, use_all_colors
     )
     
     # Metadata
+    default_colors = train_dataset.colors
     metadata = {
         'train_correlation': train_correlation,
         'test_correlation': test_correlation,
         'train_size': len(train_dataset),
         'test_size': len(test_dataset),
-        'colors': colors or [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
+        'colors': default_colors,
+        'num_colors': len(default_colors),
         'num_classes': 10,
         'image_shape': [3, 28, 28],
+        'coloring_mode': coloring_mode,
+        'use_all_colors': use_all_colors,
         'seed': seed
     }
     
@@ -155,7 +227,8 @@ def create_colored_mnist_datasets(
 
 def analyze_dataset_bias(dataset: ColoredMNISTDataset, name: str) -> Dict:
     """Analyze the bias in a colored MNIST dataset"""
-    color_counts = {0: {}, 1: {}}  # color_idx -> {label: count}
+    num_colors = len(dataset.colors)
+    color_counts = {i: {} for i in range(num_colors)}  # color_idx -> {label: count}
     correlation_counts = {'followed': 0, 'violated': 0}
     
     for i in range(len(dataset)):
@@ -181,17 +254,26 @@ def analyze_dataset_bias(dataset: ColoredMNISTDataset, name: str) -> Dict:
     print(f"\n{name} Dataset Analysis:")
     print(f"  Total samples: {total_samples}")
     print(f"  Actual correlation: {actual_correlation:.3f}")
-    print(f"  Color 0 (Red) distribution:")
-    for label, count in sorted(color_counts[0].items()):
-        print(f"    Digit {label}: {count} samples")
-    print(f"  Color 1 (Green) distribution:")
-    for label, count in sorted(color_counts[1].items()):
-        print(f"    Digit {label}: {count} samples")
+    print(f"  Coloring mode: {dataset.coloring_mode}")
+    print(f"  Use all colors: {dataset.use_all_colors}")
+    
+    # Print color distributions
+    color_names = ["Red", "Green", "Blue", "Yellow", "Magenta", "Cyan", "Orange", "Purple", "Pink", "Gray"]
+    for color_idx in range(num_colors):
+        color_name = color_names[color_idx] if color_idx < len(color_names) else f"Color_{color_idx}"
+        print(f"  {color_name} distribution:")
+        if color_idx in color_counts:
+            for label, count in sorted(color_counts[color_idx].items()):
+                print(f"    Digit {label}: {count} samples")
+        else:
+            print(f"    No samples")
     
     return {
         'actual_correlation': actual_correlation,
         'color_counts': color_counts,
-        'correlation_counts': correlation_counts
+        'correlation_counts': correlation_counts,
+        'coloring_mode': dataset.coloring_mode,
+        'use_all_colors': dataset.use_all_colors
     }
 
 
@@ -236,10 +318,6 @@ def save_colored_mnist_dataset(
     """Save colored MNIST dataset to files"""
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-
-    # Save dataset with subdir
-    subdir = f"traincorr_{metadata['train_correlation']}_testcorr_{metadata['test_correlation']}"
-    output_path = output_path / subdir
     
     # Save datasets using torch.save for efficiency
     torch.save(train_dataset, output_path / "train_dataset.pt")
@@ -281,6 +359,11 @@ def main():
                        help="Output directory for colored MNIST dataset")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--visualize", action="store_true", help="Create sample visualizations")
+    parser.add_argument("--coloring_mode", type=str, default="full_image", 
+                       choices=["full_image", "background_only", "digit_only"],
+                       help="How to apply colors to images")
+    parser.add_argument("--use_all_colors", action="store_true", 
+                       help="Use 10 colors for 10 digits instead of binary red/green")
     
     args = parser.parse_args()
     
@@ -288,6 +371,8 @@ def main():
     print("=" * 40)
     print(f"Train correlation: {args.train_correlation}")
     print(f"Test correlation: {args.test_correlation}")
+    print(f"Coloring mode: {args.coloring_mode}")
+    print(f"Use all colors: {args.use_all_colors}")
     print(f"Seed: {args.seed}")
     
     # Create datasets
@@ -295,7 +380,9 @@ def main():
         train_correlation=args.train_correlation,
         test_correlation=args.test_correlation,
         data_dir=args.data_dir,
-        seed=args.seed
+        seed=args.seed,
+        coloring_mode=args.coloring_mode,
+        use_all_colors=args.use_all_colors
     )
     
     # Analyze bias

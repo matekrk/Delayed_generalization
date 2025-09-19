@@ -28,6 +28,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from models.simple_transformer import create_grokking_model
+from utils.wandb_integration.delayed_generalization_logger import setup_wandb_for_phenomenon, create_wandb_config_from_args
 # Robust import for the dataset loader: try the expected package path first,
 # then ensure the repository root is on sys.path and try again, then fall back
 # to an alternative nested package name used in some layouts.
@@ -53,13 +54,15 @@ class GrokkingTrainer:
         device: torch.device,
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-2,
-        log_interval: int = 100
+        log_interval: int = 100,
+        wandb_logger = None
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.device = device
         self.log_interval = log_interval
+        self.wandb_logger = wandb_logger
         
         # Optimizer - weight decay is crucial for grokking!
         self.optimizer = optim.AdamW(
@@ -194,6 +197,23 @@ class GrokkingTrainer:
                 self.test_losses.append(test_loss)
                 self.train_accuracies.append(train_acc)
                 self.test_accuracies.append(test_acc)
+                
+                # Log to wandb if available
+                if self.wandb_logger:
+                    metrics = {
+                        'epoch': epoch,
+                        'train_loss': train_loss,
+                        'train_accuracy': train_acc,
+                        'test_loss': test_loss,
+                        'test_accuracy': test_acc,
+                        'best_test_accuracy': best_test_acc,
+                        'grokking_detected': grokking_epoch is not None,
+                        'time_per_epoch': elapsed
+                    }
+                    if grokking_epoch is not None:
+                        metrics['grokking_epoch'] = grokking_epoch
+                    
+                    self.wandb_logger.log_metrics(metrics, step=epoch)
         
         # Final results
         results = {
@@ -294,6 +314,23 @@ def create_data_loaders(data_dir: str, batch_size: int = 512) -> Tuple[DataLoade
     return train_loader, test_loader, metadata
 
 
+def create_experiment_save_dir(base_save_dir: str, args) -> str:
+    """Create experiment-specific save directory"""
+    if not base_save_dir:
+        return None
+    
+    # Generate experiment name based on key parameters
+    exp_name = f"grokking_d{args.d_model}_h{args.n_heads}_l{args.n_layers}_lr{args.learning_rate}_wd{args.weight_decay}"
+    if args.wandb_name:
+        exp_name = args.wandb_name
+    
+    # Create full experiment directory path
+    experiment_dir = os.path.join(base_save_dir, exp_name)
+    os.makedirs(experiment_dir, exist_ok=True)
+    
+    return experiment_dir
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train transformer on modular arithmetic for grokking")
     parser.add_argument("--data_dir", type=str, required=True, help="Path to dataset directory")
@@ -309,6 +346,15 @@ def main():
     parser.add_argument("--save_dir", type=str, default="./grokking_results", help="Directory to save results")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--log_interval", type=int, default=100, help="Logging interval")
+    
+    # Wandb logging arguments
+    parser.add_argument("--use_wandb", action="store_true", help="Enable wandb logging")
+    parser.add_argument("--wandb_project", type=str, default="delayed_generalization", 
+                       help="Wandb project name")
+    parser.add_argument("--wandb_name", type=str, default=None, 
+                       help="Wandb run name (auto-generated if not provided)")
+    parser.add_argument("--wandb_tags", type=str, nargs="*", default=None,
+                       help="Wandb tags for the run")
     
     args = parser.parse_args()
     
@@ -333,6 +379,40 @@ def main():
         dropout=args.dropout
     )
     
+    # Setup wandb logging if requested
+    wandb_logger = None
+    if args.use_wandb:
+        try:
+            # Prepare configuration for wandb
+            config = create_wandb_config_from_args(args)
+            config.update({
+                'dataset_size': len(train_loader.dataset),
+                'test_size': len(test_loader.dataset),
+                'vocab_size': metadata['vocab_size'],
+                'model_parameters': sum(p.numel() for p in model.parameters()),
+                'device': str(device)
+            })
+            
+            # Generate run name if not provided
+            if not args.wandb_name:
+                args.wandb_name = f"grokking_d{args.d_model}_wd{args.weight_decay}_lr{args.learning_rate}"
+            
+            # Setup wandb logger
+            wandb_logger = setup_wandb_for_phenomenon(
+                phenomenon_type='grokking',
+                project_name=args.wandb_project,
+                config=config
+            )
+            wandb_logger.run.name = args.wandb_name
+            if args.wandb_tags:
+                wandb_logger.run.tags = args.wandb_tags
+            
+            print(f"  Wandb tracking: {args.wandb_project}/{args.wandb_name}")
+        except Exception as e:
+            print(f"Warning: Failed to initialize wandb: {e}")
+            print("Continuing without wandb logging...")
+            wandb_logger = None
+    
     # Create trainer
     trainer = GrokkingTrainer(
         model=model,
@@ -341,7 +421,8 @@ def main():
         device=device,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        log_interval=args.log_interval
+        log_interval=args.log_interval,
+        wandb_logger=wandb_logger
     )
     
     # Train model
@@ -354,9 +435,41 @@ def main():
     print(f"  Learning rate: {args.learning_rate}")
     print(f"  Weight decay: {args.weight_decay}")
     print(f"  Model: {args.d_model}d, {args.n_heads}h, {args.n_layers}L")
+    if args.use_wandb and wandb_logger:
+        print(f"  Wandb: {args.wandb_project}/{args.wandb_name}")
     print("="*60)
     
-    results = trainer.train(args.epochs, args.save_dir)
+    # Create experiment-specific save directory
+    save_dir = create_experiment_save_dir(args.save_dir, args)
+    if save_dir:
+        print(f"Experiment results will be saved to: {save_dir}")
+    
+    results = trainer.train(args.epochs, save_dir)
+    
+    # Log final results to wandb
+    if wandb_logger:
+        final_metrics = {
+            'final/grokking_epoch': results['grokking_epoch'] if results['grokking_epoch'] else -1,
+            'final/train_accuracy': results['final_train_acc'],
+            'final/test_accuracy': results['final_test_acc'],
+            'final/best_test_accuracy': results['best_test_acc'],
+            'final/total_epochs': args.epochs
+        }
+        wandb_logger.log_metrics(final_metrics)
+        
+        # Log training curves as plots
+        if len(results['epochs']) > 0:
+            wandb_logger.log_grokking_curves(
+                epochs=results['epochs'],
+                train_losses=results['train_losses'],
+                test_losses=results['test_losses'],
+                train_accuracies=results['train_accuracies'],
+                test_accuracies=results['test_accuracies'],
+                grokking_epoch=results['grokking_epoch']
+            )
+        
+        # Finish wandb run
+        wandb_logger.finish()
     
     # Print final results
     print("\n" + "="*60)
@@ -366,7 +479,9 @@ def main():
     print(f"Final train accuracy: {results['final_train_acc']:.3f}")
     print(f"Final test accuracy: {results['final_test_acc']:.3f}")
     print(f"Best test accuracy: {results['best_test_acc']:.3f}")
-    print(f"Results saved to: {args.save_dir}")
+    print(f"Results saved to: {save_dir}")
+    if wandb_logger:
+        print(f"Wandb run: {wandb_logger.run.url}")
     print("="*60)
 
 
