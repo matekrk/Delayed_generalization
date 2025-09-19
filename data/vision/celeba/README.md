@@ -1,280 +1,233 @@
-# Synthetic CelebA Dataset  
+# CelebA Attribute Bias Research
 
-A synthetic face dataset for studying gender bias and simplicity bias in attribute prediction.
+This directory contains implementations for studying attribute bias and delayed generalization using both real and synthetic CelebA datasets.
 
 ## 📋 Overview
 
-This synthetic CelebA-like dataset creates face images where background features correlate with gender in training but not test data, demonstrating delayed generalization through simplicity bias.
+The CelebA implementations allow you to study simplicity bias using face images with configurable attribute correlations. We provide both real CelebA (recommended) and synthetic CelebA implementations for different research needs.
 
-## 🔬 Phenomenon Details
+## 🔬 Available Implementations
 
-### Simplicity Bias in Demographics
-1. **Initial Learning (0-20 epochs)**: Model learns background-gender correlation
-2. **Memorization Phase (20-100 epochs)**: High training accuracy, poor test performance
-3. **Transition Phase (100-150 epochs)**: Model begins learning facial features
-4. **Generalization (150+ epochs)**: Robust gender prediction based on facial features
+### 1. Real CelebA with Attribute Bias (⭐ Recommended)
 
-### Key Characteristics
-- **Training Bias**: Strong correlation between background and gender (e.g., 80%)
-- **Test Bias**: Weak or reversed correlation (e.g., 20%)
-- **Challenge**: Learn facial features while ignoring background spurious correlations
+Uses the actual CelebA dataset with configurable bias between any two facial attributes.
 
-## 🛠️ Dataset Generation
+**Key Features:**
+- Downloads and processes real CelebA dataset automatically  
+- Configurable bias between any pair of 40 facial attributes
+- Hierarchical directory structure for organized experiments
+- Comprehensive bias analysis during training
+- More realistic for real-world bias research
 
-### Basic Usage
+**Usage:**
 ```bash
+# Generate dataset with Male vs Blond_Hair bias
+python generate_real_celeba.py \
+    --attr1 Male --attr2 Blond_Hair \
+    --train_bias 0.8 --test_bias 0.2 \
+    --output_dir ./real_celeba_data
+
+# Train model with bias analysis
+python ../training/train_real_celeba.py \
+    --data_dir ./real_celeba_data/real_celeba_Male_Blond_Hair_trainbias_0.80_testbias_0.20 \
+    --epochs 100 --use_wandb
+```
+
+### 2. Biased CelebA-Style (Alternative Synthetic)
+
+Creates synthetic face-like images with controllable two-feature bias.
+
+**Usage:**
+```bash
+# Generate dataset with gender vs hair_color bias
+python generate_bias_celeba.py \
+    --feature1 gender --feature2 hair_color \
+    --train_bias 0.8 --test_bias 0.2 \
+    --output_dir ./bias_celeba_data
+```
+
+### 3. Synthetic CelebA (Legacy)
+
+Generates synthetic faces with background-gender correlation.
+
+**Usage:**
+```bash
+# Generate synthetic dataset
 python generate_synthetic_celeba.py \
-    --train_bias 0.8 \
-    --test_bias 0.2 \
-    --num_train 10000 \
-    --num_test 2000 \
+    --train_bias 0.8 --test_bias 0.5 \
     --output_dir ./synthetic_celeba_data
+
+# Train model
+python ../training/train_celeba.py \
+    --data_dir ./synthetic_celeba_data --epochs 100
 ```
 
-### High Bias Configuration
-```bash
-python generate_synthetic_celeba.py \
-    --train_bias 0.95 \
-    --test_bias 0.05 \
-    --background_complexity high \
-    --facial_features detailed \
-    --image_size 128 \
-    --output_dir ./high_bias_celeba
-```
+## 🎯 Real CelebA: Attribute Combinations
 
-### Balanced Configuration  
-```bash
-python generate_synthetic_celeba.py \
-    --train_bias 0.6 \
-    --test_bias 0.4 \
-    --background_complexity medium \
-    --noise_level 0.1 \
-    --output_dir ./balanced_celeba
-```
+### Popular Research Combinations
+
+1. **Gender vs Hair Color** (`Male` vs `Blond_Hair`)
+   - Studies gender bias in hiring, criminal justice
+   - Strong real-world correlation patterns
+
+2. **Age vs Makeup** (`Young` vs `Heavy_Makeup`)  
+   - Examines age-related appearance bias
+   - Relevant for age discrimination research
+
+3. **Attractiveness vs Accessories** (`Attractive` vs `Eyeglasses`)
+   - Studies beauty standards and intellectual stereotypes
+
+### Available Attributes
+
+**Primary Attributes (target labels):**
+- `Male` - Gender classification
+- `Young` - Age classification
+- `Attractive` - Attractiveness rating
+- `Smiling` - Facial expression
+
+**Secondary Attributes (spurious features):**
+- `Blond_Hair`, `Brown_Hair`, `Black_Hair` - Hair color
+- `Heavy_Makeup`, `Wearing_Lipstick` - Makeup/cosmetics  
+- `Eyeglasses`, `Wearing_Hat` - Accessories
+- `High_Cheekbones`, `Pointy_Nose` - Facial features
 
 ## 📊 Dataset Structure
 
-### Image Features
-- **Face Shape**: Geometric face outlines (oval for female, square for male)
-- **Facial Features**: Eyes, nose, mouth with gender-specific variations
-- **Background**: Patterns that correlate with gender in training
-- **Size**: Configurable (default 64x64, supports up to 128x128)
-
-### Bias Configurations
-```python
-# Strong bias configuration
-strong_bias = {
-    "train_bias": 0.9,        # 90% correlation in training
-    "test_bias": 0.1,         # 10% correlation in test  
-    "background_types": ["floral", "geometric", "textured"],
-    "background_complexity": "high"
-}
-
-# Medium bias configuration  
-medium_bias = {
-    "train_bias": 0.7,
-    "test_bias": 0.3,
-    "background_types": ["simple", "pattern"],
-    "background_complexity": "medium"
-}
-
-# Weak bias configuration
-weak_bias = {
-    "train_bias": 0.6,
-    "test_bias": 0.4,
-    "background_types": ["minimal"],
-    "background_complexity": "low"
-}
+### Real CelebA Structure
+```
+output_dir/
+└── real_celeba_{attr1}_{attr2}_trainbias_{X.XX}_testbias_{Y.YY}/
+    ├── train_dataset.pt          # PyTorch training dataset
+    ├── test_dataset.pt           # PyTorch test dataset  
+    ├── metadata.json             # Dataset configuration & statistics
+    ├── dataset_summary.json      # Quick summary
+    ├── train_samples.png         # Sample visualizations
+    └── test_samples.png          # Sample visualizations
 ```
 
-## 📈 Training Protocols
+## 🔍 Key Metrics & Phenomena
 
-### Standard Training
-```python
-model = FaceClassifier(
-    input_size=64,
-    num_classes=2,  # Male/Female
-    backbone='resnet18',
-    pretrained=False
-)
+### Bias Analysis Metrics
 
-config = {
-    "epochs": 200,
-    "batch_size": 32,
-    "learning_rate": 1e-3,
-    "optimizer": "Adam",
-    "weight_decay": 1e-4,
-    "scheduler": "cosine"
-}
+1. **Overall Accuracy**: Standard classification accuracy
+2. **Bias Conforming Accuracy**: Performance when spurious feature matches target
+3. **Bias Conflicting Accuracy**: Performance when spurious feature conflicts  
+4. **Bias Gap**: Difference between conforming and conflicting accuracy
+5. **Attribute-Specific Accuracy**: Per-attribute performance breakdown
+
+### Expected Learning Timeline
+
+**Real CelebA Pattern:**
+1. **Phase 1 (Epochs 0-20)**: Rapid spurious correlation learning
+   - High bias-conforming accuracy (>80%)
+   - Poor bias-conflicting accuracy (<40%)
+
+2. **Phase 2 (Epochs 20-60)**: Spurious feature reliance  
+   - Large bias gap (20-40 percentage points)
+   - Overall accuracy plateaus
+
+3. **Phase 3 (Epochs 60+)**: Potential delayed generalization
+   - Gradual bias gap reduction  
+   - True attribute relationship learning
+
+### Success Indicators
+- **Delayed Generalization**: Sudden bias-conflicting accuracy improvement
+- **Robust Learning**: Bias gap reduces to <10 percentage points
+- **Fair Performance**: Similar accuracy across attribute subgroups
+
+## 🛠️ Advanced Usage
+
+### Multiple Attribute Experiments
+```bash
+# Run systematic bias strength comparison
+for bias in 0.95 0.85 0.75 0.65; do
+    python generate_real_celeba.py \
+        --attr1 Male --attr2 Blond_Hair \
+        --train_bias $bias --test_bias 0.2 \
+        --output_dir ./bias_study_$bias
+done
 ```
 
-### Bias-Aware Training
-```python
-model = RobustFaceClassifier(
-    input_size=64,
-    num_classes=2,
-    backbone='resnet18',
-    dropout=0.3,
-    attention_mechanism=True  # Focus on facial features
-)
-
-config = {
-    "method": "group_dro",
-    "epochs": 300,
-    "batch_size": 16,  # Smaller for robustness
-    "learning_rate": 5e-4,
-    "data_augmentation": {
-        "background_randomization": True,
-        "color_jitter": True,
-        "random_crop": True
-    }
-}
+### Attribute Combination Study
+```bash
+# Compare different attribute pairs
+python generate_real_celeba.py --attr1 Male --attr2 Blond_Hair --output_dir ./male_blonde
+python generate_real_celeba.py --attr1 Young --attr2 Heavy_Makeup --output_dir ./young_makeup  
+python generate_real_celeba.py --attr1 Attractive --attr2 Eyeglasses --output_dir ./attractive_glasses
 ```
-
-## 📊 Evaluation Metrics
-
-### Core Metrics
-- **Overall Accuracy**: Binary gender classification accuracy
-- **Background Robustness**: Performance when backgrounds randomized
-- **Group Fairness**: Performance across gender-background combinations
-- **Feature Attribution**: Grad-CAM analysis of important regions
-
-### Group Analysis
-```python
-groups = {
-    "male_floral_bg": subset,
-    "male_geometric_bg": subset,
-    "female_floral_bg": subset,
-    "female_geometric_bg": subset
-}
-
-# Track worst-group performance
-worst_group_acc = min([
-    evaluate_group(model, group_data) 
-    for group_data in groups.values()
-])
-```
-
-### Bias Detection
-```python
-# Measure reliance on background vs facial features
-def measure_bias_reliance(model, dataset):
-    # Original images
-    orig_acc = evaluate(model, dataset)
-    
-    # Background-randomized images  
-    randomized_dataset = randomize_backgrounds(dataset)
-    random_bg_acc = evaluate(model, randomized_dataset)
-    
-    # Bias reliance score (higher = more biased)
-    bias_score = (orig_acc - random_bg_acc) / orig_acc
-    return bias_score
-```
-
-## 🎯 Expected Results
-
-### Learning Progression
-1. **Epochs 0-30**: Rapid learning of background-gender correlation
-2. **Epochs 30-80**: Plateau in test performance despite high training accuracy
-3. **Epochs 80-150**: Gradual learning of facial features
-4. **Epochs 150+**: Robust performance independent of background
-
-### Performance Targets
-- **Final Test Accuracy**: >90% on unbiased test set
-- **Background Robustness**: <5% drop when backgrounds randomized
-- **Group Fairness**: <10% gap between best and worst performing groups
 
 ## 🔬 Research Applications
 
-### Bias Mitigation Techniques
-```python
-# Background augmentation
-class BackgroundAugmentation:
-    def __call__(self, image):
-        # Replace background with random texture
-        face_mask = detect_face_region(image)
-        background = generate_random_background()
-        return composite_image(image, background, face_mask)
+### Fairness and Bias Research
+- Study demographic bias in face recognition systems
+- Develop bias mitigation techniques  
+- Evaluate fairness across protected attributes
+- Test algorithmic discrimination detection
 
-# Adversarial debiasing
-class AdversarialDebiasing:
-    def __init__(self, main_classifier, bias_classifier):
-        self.main_clf = main_classifier
-        self.bias_clf = bias_classifier
-    
-    def forward(self, x):
-        features = self.main_clf.extract_features(x)
-        gender_pred = self.main_clf.classify(features)
-        
-        # Adversarial loss to prevent background bias
-        bias_pred = self.bias_clf(features)
-        return gender_pred, bias_pred
-```
+### Delayed Generalization Studies
+- Identify when models overcome spurious correlations
+- Study role of dataset size and bias strength
+- Examine architectural influences on bias learning
+- Compare with other delayed generalization phenomena
 
-### Attention Analysis
-```python
-# Analyze what regions the model focuses on
-def analyze_attention(model, images):
-    grad_cam = GradCAM(model, target_layer='layer4')
-    
-    attention_maps = []
-    for image in images:
-        cam = grad_cam(image)
-        attention_maps.append(cam)
-    
-    # Measure attention on face vs background regions
-    face_attention = measure_face_attention(attention_maps, images)
-    bg_attention = measure_background_attention(attention_maps, images)
-    
-    return face_attention, bg_attention
-```
+### Real-World Relevance  
+- More realistic than purely synthetic datasets
+- Connects to actual fairness problems in AI systems
+- Validates findings on real image distributions
+- Bridges lab research and practical applications
 
-## 📊 Comparison with Real CelebA
+## 📈 Comparison: Real vs Synthetic
 
-### Advantages of Synthetic Version
-- **Controlled Bias**: Precise control over correlation strength
-- **Ground Truth**: Known facial features and background elements
-- **Scalability**: Generate unlimited samples with different bias levels
-- **Privacy**: No real faces, avoiding privacy concerns
+### Real CelebA Advantages
+- **Realistic Images**: Actual face photos with natural variation
+- **Complex Features**: Rich facial attribute relationships  
+- **Research Validity**: Direct relevance to real-world bias
+- **Attribute Diversity**: 40 different facial attributes available
 
-### Limitations
-- **Simplicity**: Less complex than real faces
-- **Domain Gap**: May not transfer to real-world scenarios
-- **Feature Richness**: Limited facial feature diversity
+### Synthetic CelebA Advantages  
+- **Controlled Environment**: Precise bias control
+- **Computational Efficiency**: Faster generation and training
+- **Privacy**: No real faces, avoiding ethical concerns
+- **Educational**: Clear geometric patterns for understanding
+
+## 📚 Files Overview
+
+- `generate_real_celeba.py` - **Main implementation** for real CelebA with bias
+- `generate_bias_celeba.py` - Alternative synthetic with two-feature bias
+- `generate_synthetic_celeba.py` - Legacy synthetic with background bias  
+- `training/train_real_celeba.py` - Training script for real CelebA
+- `training/train_celeba.py` - Training script for synthetic CelebA
+
+## ⚙️ Requirements
+
+- PyTorch >= 1.12.0
+- torchvision >= 0.13.0  
+- Sufficient disk space for CelebA dataset (~1.3GB)
+- CUDA-compatible GPU recommended for training
+- Internet connection for initial CelebA download
+
+## 💡 Quick Start Tips
+
+1. **Start Small**: Use `--train_size 1000 --test_size 200` for quick testing
+2. **Monitor Bias Gap**: Key metric for delayed generalization research  
+3. **Try Multiple Attributes**: Different combinations show different patterns
+4. **Use Wandb**: Add `--use_wandb` for comprehensive experiment tracking
+5. **Save Experiments**: Hierarchical structure organizes multiple runs
 
 ## 🔗 Integration Example
 
 ```python
-from datasets.vision.celeba.generate_synthetic_celeba import SyntheticCelebADataset
+from generate_real_celeba import load_real_celeba_dataset
 
-# Create dataset with different bias levels
-train_dataset = SyntheticCelebADataset(
-    num_samples=10000,
-    bias_strength=0.8,
-    image_size=64,
-    background_complexity='high'
+# Load pre-generated dataset
+train_dataset, test_dataset, metadata = load_real_celeba_dataset(
+    "./real_celeba_Male_Blond_Hair_trainbias_0.80_testbias_0.20"
 )
 
-test_dataset = SyntheticCelebADataset(
-    num_samples=2000,
-    bias_strength=0.2,  # Reduced bias
-    image_size=64,
-    background_complexity='high',
-    seed=train_dataset.seed + 1000  # Different but reproducible
-)
-
-# Training with bias monitoring
-trainer = BiasAwareTrainer(model, train_dataset, test_dataset)
-results = trainer.train(
-    epochs=200,
-    monitor_bias=True,
-    save_attention_maps=True
-)
+# Access bias information
+for image, label, metadata in train_dataset:
+    attr1_value = metadata['attr1']  # Male (0/1)  
+    attr2_value = metadata['attr2']  # Blond_Hair (0/1)
+    bias_followed = metadata['bias_followed']  # True/False
+    break
 ```
-
-## 📚 References
-
-1. Sagawa et al. (2020). "Distributionally Robust Neural Networks for Group Shifts"
-2. Kim et al. (2019). "Learning Not to Learn: Training DNNs with Biased Data"
-3. Wang et al. (2020). "Towards Fairness in Visual Recognition"
-4. Hendricks et al. (2018). "Women also Snowboard: Overcoming Bias in Captioning Models"
