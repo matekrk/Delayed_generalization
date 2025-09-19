@@ -50,9 +50,38 @@ python phenomena/simplicity_bias/colored_mnist/training/train_colored_mnist.py \
     --data_dir ./colored_mnist_data --epochs 100
 ```
 
-### CelebA (Gender Bias)
+### CelebA (Attribute Bias)
 
-Study background bias in gender classification:
+Study attribute bias in face classification with real or synthetic data:
+
+#### Real CelebA with Attribute Bias (Recommended)
+
+```bash
+# Generate real CelebA dataset with Male vs Blond_Hair bias
+python data/vision/celeba/generate_real_celeba.py \
+    --attr1 Male --attr2 Blond_Hair \
+    --train_bias 0.8 --test_bias 0.2 \
+    --train_size 10000 --test_size 2000 \
+    --output_dir ./real_celeba_data
+
+# Train CNN model with bias analysis
+python phenomena/simplicity_bias/celeba/training/train_real_celeba.py \
+    --data_dir ./real_celeba_data/real_celeba_Male_Blond_Hair_trainbias_0.80_testbias_0.20 \
+    --epochs 100 --use_wandb
+
+# Alternative attribute combinations
+# Young vs Heavy_Makeup bias
+python data/vision/celeba/generate_real_celeba.py \
+    --attr1 Young --attr2 Heavy_Makeup \
+    --train_bias 0.9 --test_bias 0.1 --output_dir ./real_celeba_young_makeup
+
+# Attractive vs Eyeglasses bias  
+python data/vision/celeba/generate_real_celeba.py \
+    --attr1 Attractive --attr2 Eyeglasses \
+    --train_bias 0.85 --test_bias 0.15 --output_dir ./real_celeba_attractive_glasses
+```
+
+#### Synthetic CelebA (Legacy)
 
 ```bash
 # Generate synthetic CelebA dataset
@@ -87,9 +116,15 @@ python phenomena/robustness/cifar10c/training/train_cifar10c.py \
 - **Epochs 5000+**: Generalization phase (high test accuracy achieved)
 
 ### Simplicity Bias Timeline
-- **Early Training**: Model learns spurious correlations (background, color)
+- **Early Training**: Model learns spurious correlations (background, color, spurious attributes)
 - **Mid Training**: Spurious accuracy high, robust accuracy low
-- **Late Training**: Gradual shift to learning true features (bird type, digit shape)
+- **Late Training**: Gradual shift to learning true features (bird type, digit shape, core attributes)
+
+### CelebA Attribute Bias Timeline
+- **Phase 1 (Epochs 0-20)**: Rapid learning of spurious correlations (e.g., Male → Non-Blonde)
+- **Phase 2 (Epochs 20-60)**: High bias-conforming accuracy, poor bias-conflicting accuracy
+- **Phase 3 (Epochs 60+)**: Potential delayed generalization to true attribute relationships
+- **Key Transition**: Watch for bias gap reduction indicating robust feature learning
 
 ### Robustness Development
 - **Clean Images**: High accuracy achieved quickly
@@ -98,9 +133,25 @@ python phenomena/robustness/cifar10c/training/train_cifar10c.py \
 
 ## 🔍 Key Metrics to Monitor
 
-- **Grokking**: Train vs test accuracy gap sudden closure
-- **Bias Research**: Worst-group accuracy, spurious correlation strength
-- **Robustness**: Clean vs corrupted accuracy gap
+### Grokking (Modular Arithmetic)
+- **Train vs test accuracy gap**: Sudden closure indicating generalization
+- **Loss transition**: Sharp drop in test loss after long plateau
+
+### Simplicity Bias (Colored MNIST, CelebA)
+- **Bias gap**: Difference between bias-conforming and bias-conflicting accuracy
+- **Spurious correlation strength**: How much model relies on biased features
+- **Worst-group accuracy**: Performance on hardest subgroup (e.g., blonde males)
+- **Attribute accuracy**: Per-attribute classification performance
+
+### CelebA-Specific Metrics
+- **Bias conforming accuracy**: Performance when spurious feature matches target
+- **Bias conflicting accuracy**: Performance when spurious feature conflicts with target
+- **Attribute correlation**: Correlation between predicted and spurious attributes
+- **Fairness metrics**: Equal opportunity across demographic groups
+
+### Robustness (CIFAR-10-C)
+- **Clean vs corrupted accuracy gap**: Robustness measure
+- **Corruption-specific performance**: Per-corruption type accuracy
 
 ## 💡 Research Applications
 
