@@ -118,12 +118,26 @@ class RealCelebATrainer:
         self.device = device
         self.use_wandb = use_wandb
         
-        # Setup optimizer and loss
-        self.optimizer = optim.Adam(
-            model.parameters(),
-            lr=learning_rate,
-            weight_decay=weight_decay
-        )
+        # Setup optimizer and loss using enhanced optimizers
+        try:
+            # Try to use enhanced optimizer from our reorganized structure
+            from optimization import get_default_optimizer
+            self.optimizer = get_default_optimizer(
+                model, 
+                phenomenon_type='simplicity_bias',
+                learning_rate=learning_rate,
+                weight_decay=weight_decay
+            )
+            print("Using enhanced optimizer for CelebA bias experiments")
+        except ImportError:
+            # Fallback to standard Adam
+            self.optimizer = optim.Adam(
+                model.parameters(),
+                lr=learning_rate,
+                weight_decay=weight_decay
+            )
+            print("Using standard Adam optimizer")
+            
         self.criterion = nn.CrossEntropyLoss()
         
         # Learning rate scheduler
