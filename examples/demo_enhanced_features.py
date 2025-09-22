@@ -189,7 +189,7 @@ def example_training_integration():
     )
     
     # Use enhanced trainer (will automatically use enhanced optimizers)
-    from phenomena.simplicity_bias.colored_mnist.training.train_colored_mnist import SimplicityBiasTrainer
+    from phenomena.simplicity_bias.colored_mnist.train_colored_mnist import SimplicityBiasTrainer
     
     trainer = SimplicityBiasTrainer(
         model=model,
