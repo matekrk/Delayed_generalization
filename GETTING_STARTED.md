@@ -57,28 +57,28 @@ Study attribute bias in face classification with real or synthetic data:
 #### Real CelebA with Attribute Bias (Recommended)
 
 ```bash
-# Generate real CelebA dataset with Male vs Blond_Hair bias
-python data/vision/celeba/generate_real_celeba.py \
+# Generate real biased CelebA dataset with Male vs Blond_Hair bias
+python data/vision/celeba/generate_bias_celeba.py \
     --attr1 Male --attr2 Blond_Hair \
     --train_bias 0.8 --test_bias 0.2 \
     --train_size 10000 --test_size 2000 \
-    --output_dir ./real_celeba_data
+    --output_dir ./bias_celeba_data
 
 # Train CNN model with bias analysis
-python phenomena/simplicity_bias/celeba/training/train_real_celeba.py \
-    --data_dir ./real_celeba_data/real_celeba_Male_Blond_Hair_trainbias_0.80_testbias_0.20 \
+python phenomena/simplicity_bias/celeba/training/train_bias_celeba.py \
+    --data_dir ./bias_celeba_data/real_celeba_Male_Blond_Hair_trainbias_0.80_testbias_0.20 \
     --epochs 100 --use_wandb
 
 # Alternative attribute combinations
 # Young vs Heavy_Makeup bias
-python data/vision/celeba/generate_real_celeba.py \
+python data/vision/celeba/generate_bias_celeba.py \
     --attr1 Young --attr2 Heavy_Makeup \
-    --train_bias 0.9 --test_bias 0.1 --output_dir ./real_celeba_young_makeup
+    --train_bias 0.9 --test_bias 0.1 --output_dir ./bias_celeba_young_makeup
 
 # Attractive vs Eyeglasses bias  
-python data/vision/celeba/generate_real_celeba.py \
+python data/vision/celeba/generate_bias_celeba.py \
     --attr1 Attractive --attr2 Eyeglasses \
-    --train_bias 0.85 --test_bias 0.15 --output_dir ./real_celeba_attractive_glasses
+    --train_bias 0.85 --test_bias 0.15 --output_dir ./bias_celeba_attractive_glasses
 ```
 
 #### Synthetic CelebA (Legacy)
