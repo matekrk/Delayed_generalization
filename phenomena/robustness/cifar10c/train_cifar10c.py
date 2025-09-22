@@ -26,8 +26,9 @@ from typing import Dict, Tuple, List, Optional
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from data.cifar10c.generate_synthetic_cifar10c import load_synthetic_cifar10c_dataset
-
+# from data.vision.cifar10c.generate_synthetic_cifar10c import load_synthetic_cifar10c_dataset
+from data.vision.cifar10c.generate_cifar10c import load_cifar10c_dataset
+from data.vision.cifar10c.generate_cifar10c import CIFAR10CDataset
 
 class CIFAR10CModel(nn.Module):
     """CNN model for synthetic CIFAR-10-C classification"""
@@ -295,13 +296,66 @@ class CIFAR10CTrainer:
 def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
     """Create data loaders from saved dataset"""
     # Load dataset
-    train_dataset, test_dataset, metadata = load_synthetic_cifar10c_dataset(data_dir)
+    train_dataset, test_dataset, metadata = load_cifar10c_dataset(data_dir)
     
     # Convert to tensors
     def dataset_to_tensors(dataset):
-        images = torch.stack([sample['image'] for sample in dataset])
-        labels = torch.tensor([sample['label'] for sample in dataset])
-        corruption_types = torch.tensor([sample['corruption_type'] for sample in dataset])
+        # Support datasets that yield dict-like samples or tuples/lists
+        images_list = []
+        labels_list = []
+        corruption_list = []
+        for sample in dataset:
+            if isinstance(sample, dict):
+                img = sample['image']
+                lbl = sample['label']
+                corr = sample.get('corruption_type', 0)
+            elif isinstance(sample, (tuple, list)):
+                # expect (image, label, corruption_type) or (image, label)
+                if len(sample) == 3:
+                    img, lbl, corr = sample
+                elif len(sample) == 2:
+                    img, lbl = sample
+                    corr = 0
+                else:
+                    raise ValueError(f"Unexpected sample structure with length {len(sample)}")
+            else:
+                # try attribute access as a fallback
+                try:
+                    img = sample.image
+                    lbl = sample.label
+                    corr = getattr(sample, 'corruption_type', 0)
+                except Exception:
+                    raise TypeError("Unsupported sample type: must be dict, tuple/list, or object with attributes")
+            images_list.append(img)
+            labels_list.append(lbl)
+            corruption_list.append(corr)
+        images = torch.stack([torch.as_tensor(img) for img in images_list])
+        labels = torch.tensor(labels_list)
+
+        # Normalize/convert corruption types to integer indices
+        def _parse_corruption(corr):
+            # Handle dict-like corruption info
+            if isinstance(corr, dict):
+                for key in ('corruption_type', 'type', 'id', 'idx', 'index', 'severity', 'name'):
+                    if key in corr:
+                        corr = corr[key]
+                        break
+                else:
+                    # fallback to 0 if dict structure is unexpected
+                    return 0
+            # If it's a string try to convert to int, otherwise fallback to 0
+            if isinstance(corr, str):
+                try:
+                    return int(corr)
+                except Exception:
+                    return 0
+            # Numeric types
+            try:
+                return int(corr)
+            except Exception:
+                return 0
+
+        corruption_types = torch.tensor([_parse_corruption(c) for c in corruption_list], dtype=torch.long)
         return images, labels, corruption_types
     
     train_images, train_labels, train_corruptions = dataset_to_tensors(train_dataset)

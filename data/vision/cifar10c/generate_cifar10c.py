@@ -22,6 +22,8 @@ from typing import Tuple, Dict, List, Optional
 from PIL import Image, ImageFilter, ImageEnhance
 import cv2
 
+from data.vision.cifar10c.generate_synthetic_cifar10c import SyntheticCIFAR10CDataset
+
 
 class CIFAR10CDataset(Dataset):
     """Dataset that applies corruptions to CIFAR-10 images"""
@@ -464,31 +466,148 @@ def save_cifar10c_datasets(
 ):
     """Save CIFAR-10-C datasets to files"""
     output_path = Path(output_dir)
+    corrupted_path = output_path / "cifar10c"
+    corrupted_path.mkdir(parents=True, exist_ok=True)
     
     # Save datasets with informative subdir
-    corruption_str = "_".join(metadata['corruption_types'])
-    severity_str = f"severity_{metadata['severity']}"
-    subdir = f"cifar10c_{corruption_str}_{severity_str}"
-    output_path = output_path / subdir
-    output_path.mkdir(parents=True, exist_ok=True)
+    # corruption_str = "_".join(metadata['corruption_types'])
+    # severity_str = f"severity_{metadata['severity']}"
+    # subdir = f"cifar10c_{corruption_str}_{severity_str}"
+    # output_path = output_path / subdir
+    # output_path.mkdir(parents=True, exist_ok=True)
     
     # Save datasets for each corruption type
     for corruption_type in metadata['corruption_types']:
-        corruption_dir = output_path / corruption_type
-        corruption_dir.mkdir(exist_ok=True)
+        severity_str = f"severity_{metadata['severity']}"
+        subdir = f"{corruption_type}_{severity_str}"
+        output_path = corrupted_path / subdir
+        output_path.mkdir(parents=True, exist_ok=True)
         
-        torch.save(train_datasets[corruption_type], corruption_dir / "train_dataset.pt")
-        torch.save(test_datasets[corruption_type], corruption_dir / "test_dataset.pt")
+        torch.save(train_datasets[corruption_type], output_path / "train_dataset.pt")
+        torch.save(test_datasets[corruption_type], output_path / "test_dataset.pt")
     
     # Save metadata
-    with open(output_path / "metadata.json", "w") as f:
+    with open(corrupted_path / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
     
     # Create visualizations
-    visualize_cifar10c(train_datasets, 5, str(output_path / "train_corruptions.png"))
-    visualize_cifar10c(test_datasets, 5, str(output_path / "test_corruptions.png"))
+    visualize_cifar10c(train_datasets, 5, str(corrupted_path / "train_corruptions.png"))
+    visualize_cifar10c(test_datasets, 5, str(corrupted_path / "test_corruptions.png"))
     
-    print(f"CIFAR-10-C datasets saved to {output_path}")
+    print(f"CIFAR-10-C datasets saved to {corrupted_path} with each corruption type in its own subdirectory.")
+
+def load_cifar10c_dataset(data_dir: str):
+    """Load CIFAR-10-C datasets saved by save_cifar10c_datasets.
+
+    Supports:
+      - current format where each corruption subdir contains pickled CIFAR10CDataset
+        objects saved with torch.save(...)
+      - legacy dict-based dumps that contain precomputed 'images' and 'labels'
+
+    Returns:
+      train_dataset, test_dataset, metadata
+    """
+    data_path = Path(data_dir)
+
+    # If user passed a file, use its parent dir
+    if data_path.is_file():
+        data_path = data_path.parent
+
+    train_path = data_path / "train_dataset.pt"
+    test_path = data_path / "test_dataset.pt"
+    metadata_path = data_path / "metadata.json"
+
+    # If not found at this level, try to find a single corruption subdir under it
+    if not (train_path.exists() and test_path.exists()):
+        subdirs = [d for d in data_path.iterdir() if d.is_dir()]
+        if len(subdirs) == 1:
+            # use the only subdir
+            data_path = subdirs[0]
+            train_path = data_path / "train_dataset.pt"
+            test_path = data_path / "test_dataset.pt"
+            metadata_path = data_path.parent / "metadata.json"
+        else:
+            raise FileNotFoundError(
+                f"Could not find train_dataset.pt/test_dataset.pt in {data_dir} "
+                "and could not infer a unique corruption subdirectory."
+            )
+
+    if not train_path.exists() or not test_path.exists():
+        raise FileNotFoundError(f"Missing dataset files in {data_path}: "
+                                f"{'train_dataset.pt missing' if not train_path.exists() else ''} "
+                                f"{'test_dataset.pt missing' if not test_path.exists() else ''}")
+
+    # Load metadata (try provided location, then parent)
+    metadata = {}
+    if (metadata_path).exists():
+        with open(metadata_path, "r") as f:
+            metadata = json.load(f)
+    else:
+        parent_meta = data_path.parent / "metadata.json"
+        if parent_meta.exists():
+            with open(parent_meta, "r") as f:
+                metadata = json.load(f)
+        else:
+            # not fatal; continue but warn user
+            metadata = {}
+
+    # Helper to turn legacy dict dumps into a Dataset-like object
+    class _LoadedPrecomputedDataset(Dataset):
+        def __init__(self, data_dict):
+            # expected keys: 'images' (N x H x W x C or list), 'labels' (N,)
+            self.images = data_dict.get("images")
+            self.labels = data_dict.get("labels")
+            # normalize data types
+            if isinstance(self.images, list):
+                self.images = np.array(self.images)
+            # ensure numpy array with shape (N, H, W, C)
+            if isinstance(self.images, np.ndarray):
+                # convert to uint8 if floats in 0-1
+                if self.images.dtype == np.float32 or self.images.dtype == np.float64:
+                    if self.images.max() <= 1.0:
+                        self.images = (self.images * 255).astype(np.uint8)
+                # ensure shape consistency
+            else:
+                raise TypeError("Unsupported images type in saved dict")
+            self.labels = np.array(self.labels, dtype=np.int64)
+
+        def __len__(self):
+            return int(self.images.shape[0])
+
+        def __getitem__(self, idx):
+            img = self.images[int(idx)]
+            # convert HWC numpy uint8 to tensor CxHxW float in [0,1]
+            if isinstance(img, np.ndarray):
+                img_tensor = torch.from_numpy(img.transpose(2, 0, 1)).float() / 255.0
+            else:
+                # fallback to PIL->tensor
+                img_tensor = transforms.ToTensor()(img)
+            label = int(self.labels[int(idx)])
+            # keep minimal metadata for compatibility
+            metadata_local = {"source": "precomputed"}
+            return img_tensor, label, metadata_local
+
+    def _wrap_loaded(obj):
+        # If it's already a CIFAR10CDataset (pickled), return as-is
+        if isinstance(obj, CIFAR10CDataset):
+            return obj
+        # If it's a generic Dataset (saved directly), return as-is
+        if isinstance(obj, Dataset):
+            return obj
+        # If it's a dict produced by older save routines, convert
+        if isinstance(obj, dict):
+            return _LoadedPrecomputedDataset(obj)
+        # If torch.load returned something unexpected, raise
+        raise TypeError(f"Loaded object type {type(obj)} not supported")
+
+    # Load with torch.load (no extra args)
+    train_obj = torch.load(train_path)
+    test_obj = torch.load(test_path)
+
+    train_dataset = _wrap_loaded(train_obj)
+    test_dataset = _wrap_loaded(test_obj)
+
+    return train_dataset, test_dataset, metadata
 
 
 def main():

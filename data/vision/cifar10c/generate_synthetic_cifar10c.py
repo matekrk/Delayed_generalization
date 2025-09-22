@@ -293,11 +293,22 @@ def load_synthetic_cifar10c_dataset(data_dir: str) -> Tuple[SyntheticCIFAR10CDat
     data_path = Path(data_dir)
     
     # Load data dictionaries
-    train_data = torch.load(data_path / "train_data.pt", weights_only=False)
-    test_data = torch.load(data_path / "test_data.pt", weights_only=False)
+    train_data = torch.load(data_path / "train_dataset.pt", weights_only=False)
+    test_data = torch.load(data_path / "test_dataset.pt", weights_only=False)
     
-    with open(data_path / "metadata.json", "r") as f:
-        metadata = json.load(f)
+    try:
+        with open(data_path / "metadata.json", "r") as f:
+            metadata = json.load(f)
+    except FileNotFoundError:
+        # try parent directory
+        parent_meta = data_path.parent / "metadata.json"
+        if parent_meta.exists():
+            with open(parent_meta, "r") as f:
+                metadata = json.load(f)
+        else:
+            raise FileNotFoundError(
+                f"metadata.json not found in {data_path} or its parent {data_path.parent}"
+            )
     
     # Reconstruct datasets
     train_dataset = SyntheticCIFAR10CDataset.__new__(SyntheticCIFAR10CDataset)

@@ -27,7 +27,7 @@ import wandb
 repo_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.append(str(repo_root))
 
-from data.vision.celeba.generate_real_celeba import load_real_celeba_dataset, BiasedRealCelebADataset
+from data.vision.celeba.generate_bias_celeba import load_real_celeba_dataset, BiasedRealCelebADataset
 
 
 class RealCelebAModel(nn.Module):
