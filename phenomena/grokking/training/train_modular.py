@@ -308,11 +308,32 @@ class GrokkingTrainer:
         plt.close()
 
 
-def create_data_loaders(data_dir: str, batch_size: int = 512) -> Tuple[DataLoader, DataLoader, Dict]:
-    """Create train and test data loaders"""
+def create_data_loaders(data_dir: str, batch_size: int = 512, data_fraction: float = 1.0) -> Tuple[DataLoader, DataLoader, Dict]:
+    """Create train and test data loaders with optional data fraction"""
     print(f"Loading dataset from {data_dir}")
     
     train_inputs, train_targets, test_inputs, test_targets, metadata = load_dataset(data_dir)
+    
+    # Apply data fraction if specified
+    if data_fraction < 1.0:
+        print(f"Using {data_fraction:.2%} of the dataset")
+        
+        # Sample fraction of training data
+        train_size = len(train_inputs)
+        new_train_size = int(train_size * data_fraction)
+        indices = np.random.choice(train_size, new_train_size, replace=False)
+        train_inputs = train_inputs[indices]
+        train_targets = train_targets[indices]
+        
+        # Sample fraction of test data
+        test_size = len(test_inputs)
+        new_test_size = int(test_size * data_fraction)
+        indices = np.random.choice(test_size, new_test_size, replace=False)
+        test_inputs = test_inputs[indices]
+        test_targets = test_targets[indices]
+        
+        print(f"Reduced train size: {len(train_inputs)} (from {train_size})")
+        print(f"Reduced test size: {len(test_inputs)} (from {test_size})")
     
     # Convert to tensors
     train_inputs = torch.from_numpy(train_inputs).long()
@@ -328,8 +349,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 512) -> Tuple[DataLoade
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     
-    print(f"Train size: {len(train_dataset)}")
-    print(f"Test size: {len(test_dataset)}")
+    print(f"Final train size: {len(train_dataset)}")
+    print(f"Final test size: {len(test_dataset)}")
     print(f"Vocabulary size: {metadata['vocab_size']}")
     
     return train_loader, test_loader, metadata
@@ -365,8 +386,12 @@ def main():
     parser.add_argument("--d_ff", type=int, default=512, help="Feed-forward dimension")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout rate")
     parser.add_argument("--save_dir", type=str, default="./grokking_results", help="Directory to save results")
+    parser.add_argument("--results_dir", type=str, default=None, 
+                       help="Alternative name for save_dir (same functionality)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--log_interval", type=int, default=100, help="Logging interval")
+    parser.add_argument("--data_fraction", type=float, default=1.0, 
+                       help="Fraction of dataset to use (0.0-1.0, default: 1.0 for full dataset)")
     
     # Wandb logging arguments
     parser.add_argument("--use_wandb", action="store_true", help="Enable wandb logging")
@@ -379,6 +404,10 @@ def main():
     
     args = parser.parse_args()
     
+    # Handle alternative results_dir argument
+    if args.results_dir is not None:
+        args.save_dir = args.results_dir
+    
     # Set random seed
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -388,7 +417,7 @@ def main():
     print(f"Using device: {device}")
     
     # Create data loaders
-    train_loader, test_loader, metadata = create_data_loaders(args.data_dir, args.batch_size)
+    train_loader, test_loader, metadata = create_data_loaders(args.data_dir, args.batch_size, args.data_fraction)
     
     # Create model
     model = create_grokking_model(
@@ -452,6 +481,9 @@ def main():
     print("="*60)
     print(f"Configuration:")
     print(f"  Dataset: {args.data_dir}")
+    print(f"  Data fraction: {args.data_fraction:.2%}")
+    print(f"  Train size: {len(train_loader.dataset)}")
+    print(f"  Test size: {len(test_loader.dataset)}")
     print(f"  Epochs: {args.epochs}")
     print(f"  Learning rate: {args.learning_rate}")
     print(f"  Weight decay: {args.weight_decay}")
