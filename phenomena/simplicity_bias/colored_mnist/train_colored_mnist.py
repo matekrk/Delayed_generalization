@@ -350,8 +350,8 @@ class SimplicityBiasTrainer:
         plt.close()
 
 
-def create_data_loaders(data_dir: str, batch_size: int = 128) -> Tuple[DataLoader, DataLoader, Dict]:
-    """Create train and test data loaders for colored MNIST"""
+def create_data_loaders(data_dir: str, batch_size: int = 128, data_fraction: float = 1.0) -> Tuple[DataLoader, DataLoader, Dict]:
+    """Create train and test data loaders for colored MNIST with optional data fraction"""
     print(f"Loading colored MNIST from {data_dir}")
     
     # Try loading synthetic dataset first, then fall back to real MNIST
@@ -361,6 +361,26 @@ def create_data_loaders(data_dir: str, batch_size: int = 128) -> Tuple[DataLoade
     except:
         train_dataset, test_dataset, metadata = load_colored_mnist_dataset(data_dir)
         print("Loaded real colored MNIST dataset")
+    
+    original_train_size = len(train_dataset)
+    original_test_size = len(test_dataset)
+    
+    # Apply data fraction if specified
+    if data_fraction < 1.0:
+        print(f"Using {data_fraction:.2%} of the dataset")
+        
+        # Create subset of training data
+        train_size = int(original_train_size * data_fraction)
+        train_indices = torch.randperm(original_train_size)[:train_size]
+        train_dataset = torch.utils.data.Subset(train_dataset, train_indices)
+        
+        # Create subset of test data
+        test_size = int(original_test_size * data_fraction)
+        test_indices = torch.randperm(original_test_size)[:test_size]
+        test_dataset = torch.utils.data.Subset(test_dataset, test_indices)
+        
+        print(f"Reduced train size: {len(train_dataset)} (from {original_train_size})")
+        print(f"Reduced test size: {len(test_dataset)} (from {original_test_size})")
     
     # Custom collate function to handle metadata properly
     def collate_fn(batch):
@@ -373,8 +393,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 128) -> Tuple[DataLoade
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
     
-    print(f"Train size: {len(train_dataset)}")
-    print(f"Test size: {len(test_dataset)}")
+    print(f"Final train size: {len(train_dataset)}")
+    print(f"Final test size: {len(test_dataset)}")
     print(f"Train correlation: {metadata['train_correlation']}")
     print(f"Test correlation: {metadata['test_correlation']}")
     
@@ -392,10 +412,19 @@ def main():
                        default='simple', help="Type of model to use")
     parser.add_argument("--dropout", type=float, default=0.2, help="Dropout rate")
     parser.add_argument("--save_dir", type=str, default="./colored_mnist_results", help="Directory to save results")
+    parser.add_argument("--results_dir", type=str, default=None, 
+                       help="Alternative name for save_dir (same functionality)")
+    parser.add_argument("--data_fraction", type=float, default=1.0, 
+                       help="Fraction of dataset to use (0.0-1.0, default: 1.0 for full dataset)")
+    parser.add_argument("--use_wandb", action="store_true", help="Enable wandb logging")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--log_interval", type=int, default=10, help="Logging interval")
     
     args = parser.parse_args()
+    
+    # Handle alternative results_dir argument
+    if args.results_dir is not None:
+        args.save_dir = args.results_dir
     
     # Set random seed
     torch.manual_seed(args.seed)
@@ -404,9 +433,11 @@ def main():
     # Device selection
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+    print(f"Data fraction: {args.data_fraction:.2%}")
+    print(f"Use wandb: {args.use_wandb}")
     
     # Create data loaders
-    train_loader, test_loader, metadata = create_data_loaders(args.data_dir, args.batch_size)
+    train_loader, test_loader, metadata = create_data_loaders(args.data_dir, args.batch_size, args.data_fraction)
     
     # Create model
     model_kwargs = {'dropout': args.dropout}

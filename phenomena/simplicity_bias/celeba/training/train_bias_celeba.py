@@ -118,12 +118,26 @@ class RealCelebATrainer:
         self.device = device
         self.use_wandb = use_wandb
         
-        # Setup optimizer and loss
-        self.optimizer = optim.Adam(
-            model.parameters(),
-            lr=learning_rate,
-            weight_decay=weight_decay
-        )
+        # Setup optimizer and loss using enhanced optimizers
+        try:
+            # Try to use enhanced optimizer from our reorganized structure
+            from optimization import get_default_optimizer
+            self.optimizer = get_default_optimizer(
+                model, 
+                phenomenon_type='simplicity_bias',
+                learning_rate=learning_rate,
+                weight_decay=weight_decay
+            )
+            print("Using enhanced optimizer for CelebA bias experiments")
+        except ImportError:
+            # Fallback to standard Adam
+            self.optimizer = optim.Adam(
+                model.parameters(),
+                lr=learning_rate,
+                weight_decay=weight_decay
+            )
+            print("Using standard Adam optimizer")
+            
         self.criterion = nn.CrossEntropyLoss()
         
         # Learning rate scheduler
@@ -439,13 +453,33 @@ class RealCelebATrainer:
         plt.close()
 
 
-def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader, DataLoader, Dict]:
-    """Create data loaders from saved real CelebA dataset"""
+def create_data_loaders(data_dir: str, batch_size: int = 32, data_fraction: float = 1.0) -> Tuple[DataLoader, DataLoader, Dict]:
+    """Create data loaders from saved real CelebA dataset with optional data fraction"""
     # Load dataset
     train_dataset, test_dataset, metadata = load_real_celeba_dataset(data_dir)
     
+    original_train_size = len(train_dataset)
+    original_test_size = len(test_dataset)
+    
+    # Apply data fraction if specified
+    if data_fraction < 1.0:
+        print(f"Using {data_fraction:.2%} of the dataset")
+        
+        # Create subset of training data
+        train_size = int(original_train_size * data_fraction)
+        indices = torch.randperm(original_train_size)[:train_size]
+        train_dataset = torch.utils.data.Subset(train_dataset, indices)
+        
+        # Create subset of test data
+        test_size = int(original_test_size * data_fraction)
+        indices = torch.randperm(original_test_size)[:test_size]
+        test_dataset = torch.utils.data.Subset(test_dataset, indices)
+        
+        print(f"Reduced train size: {len(train_dataset)} (from {original_train_size})")
+        print(f"Reduced test size: {len(test_dataset)} (from {original_test_size})")
+    
     print(f"Dataset loaded: {metadata['attr1_name']} vs {metadata['attr2_name']}")
-    print(f"Train size: {len(train_dataset)}, Test size: {len(test_dataset)}")
+    print(f"Final train size: {len(train_dataset)}, Final test size: {len(test_dataset)}")
     
     # Create data loaders
     train_loader = DataLoader(
@@ -464,6 +498,12 @@ def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader
         pin_memory=True
     )
     
+    # Update metadata with actual sizes used
+    metadata = metadata.copy()
+    metadata['actual_train_size'] = len(train_dataset)
+    metadata['actual_test_size'] = len(test_dataset)
+    metadata['data_fraction'] = data_fraction
+    
     return train_loader, test_loader, metadata
 
 
@@ -478,11 +518,19 @@ def main():
     parser.add_argument("--dropout_rate", type=float, default=0.5, help="Dropout rate")
     parser.add_argument("--save_dir", type=str, default="./real_celeba_results", 
                        help="Directory to save results")
+    parser.add_argument("--results_dir", type=str, default=None, 
+                       help="Alternative name for save_dir (same functionality)")
+    parser.add_argument("--data_fraction", type=float, default=1.0, 
+                       help="Fraction of dataset to use (0.0-1.0, default: 1.0 for full dataset)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--use_wandb", action="store_true", help="Use Weights & Biases logging")
     parser.add_argument("--log_interval", type=int, default=10, help="Logging interval")
     
     args = parser.parse_args()
+    
+    # Handle alternative results_dir argument
+    if args.results_dir is not None:
+        args.save_dir = args.results_dir
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -496,6 +544,7 @@ def main():
     print("Real CelebA Bias Training")
     print("=" * 30)
     print(f"Data directory: {args.data_dir}")
+    print(f"Data fraction: {args.data_fraction:.2%}")
     print(f"Device: {device}")
     print(f"Epochs: {args.epochs}")
     print(f"Batch size: {args.batch_size}")
@@ -506,7 +555,7 @@ def main():
     
     # Create data loaders
     print("\nLoading dataset...")
-    train_loader, test_loader, metadata = create_data_loaders(args.data_dir, args.batch_size)
+    train_loader, test_loader, metadata = create_data_loaders(args.data_dir, args.batch_size, args.data_fraction)
     print(f"Train batches: {len(train_loader)}")
     print(f"Test batches: {len(test_loader)}")
     
@@ -515,7 +564,13 @@ def main():
     attr2 = metadata['attr2_name']
     train_bias = metadata['train_bias']
     test_bias = metadata['test_bias']
-    experiment_name = f"real_celeba_{attr1}_{attr2}_tb{train_bias}_testb{test_bias}"
+    train_size = metadata['actual_train_size']
+    
+    # Include size and fraction in experiment name
+    if args.data_fraction < 1.0:
+        experiment_name = f"real_celeba_{attr1}_{attr2}_tb{train_bias}_testb{test_bias}_frac{args.data_fraction:.2f}_size{train_size}"
+    else:
+        experiment_name = f"real_celeba_{attr1}_{attr2}_tb{train_bias}_testb{test_bias}_size{train_size}"
     
     # Create model
     model = RealCelebAModel(

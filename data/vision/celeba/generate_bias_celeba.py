@@ -457,6 +457,243 @@ def load_real_celeba_dataset(data_dir: str) -> Tuple[BiasedRealCelebADataset, Bi
     return train_dataset, test_dataset, metadata
 
 
+def create_multi_attribute_celeba_dataset(
+    data_root: str = "./celeba_data",
+    bias_pairs: List[Tuple[str, str]] = [("Male", "Blond_Hair"), ("Young", "Heavy_Makeup")],
+    additional_attrs: List[str] = ["Attractive", "Eyeglasses", "Smiling"],
+    train_bias: float = 0.8,
+    test_bias: float = 0.2,
+    train_size: int = 10000,
+    test_size: int = 2000,
+    image_size: int = 64,
+    seed: int = 42
+) -> Tuple[Dataset, Dataset, Dict]:
+    """
+    Create CelebA dataset with multiple biased attribute pairs plus additional attributes.
+    
+    This function creates a more complex bias scenario where:
+    1. Multiple attribute pairs have biased correlations
+    2. Additional attributes are included without bias
+    3. Models must learn to distinguish spurious from true correlations
+    
+    Args:
+        data_root: Root directory for CelebA data
+        bias_pairs: List of (attr1, attr2) tuples to bias
+        additional_attrs: Additional attributes to include without bias
+        train_bias: Bias strength in training (0.5-1.0)
+        test_bias: Bias strength in test (0.0-0.5)
+        train_size: Number of training samples
+        test_size: Number of test samples
+        image_size: Size to resize images
+        seed: Random seed
+        
+    Returns:
+        train_dataset, test_dataset, metadata
+    """
+    
+    print(f"Creating multi-attribute CelebA dataset...")
+    print(f"Bias pairs: {bias_pairs}")
+    print(f"Additional attributes: {additional_attrs}")
+    print(f"Train bias: {train_bias}, Test bias: {test_bias}")
+    
+    # Set seed
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    
+    # Define transform
+    transform = transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    
+    # Load full CelebA dataset
+    print(f"Loading CelebA dataset from {data_root}...")
+    full_dataset = torchvision.datasets.CelebA(
+        root=data_root,
+        split='all',
+        target_type='attr',
+        transform=transform,
+        download=True
+    )
+    
+    # Get attribute names
+    with open(os.path.join(data_root, 'celeba', 'list_attr_celeba.txt'), 'r') as f:
+        attr_names = f.readline().strip().split()
+    
+    # Get indices for all attributes we care about
+    all_attrs = [pair[0] for pair in bias_pairs] + [pair[1] for pair in bias_pairs] + additional_attrs
+    all_attrs = list(set(all_attrs))  # Remove duplicates
+    attr_indices = {attr: attr_names.index(attr) for attr in all_attrs}
+    
+    print(f"Using attributes: {all_attrs}")
+    
+    # Sample and filter valid data
+    valid_indices = []
+    attr_stats = {attr: [0, 0] for attr in all_attrs}  # [count_0, count_1]
+    
+    MAX_SIZE = 200000
+    total_samples = min(len(full_dataset), MAX_SIZE)
+    sample_indices = np.random.choice(len(full_dataset), total_samples, replace=False)
+    
+    for i in sample_indices:
+        _, attrs = full_dataset[i]
+        
+        # Check if we have all required attributes
+        valid = True
+        attr_values = {}
+        for attr in all_attrs:
+            val = attrs[attr_indices[attr]].item()
+            attr_values[attr] = val
+            attr_stats[attr][val] += 1
+        
+        if valid:
+            valid_indices.append((i, attr_values))
+    
+    print(f"\nAttribute distribution in sampled data:")
+    for attr in all_attrs:
+        total = sum(attr_stats[attr])
+        print(f"  {attr}: {attr_stats[attr][1]}/{total} ({attr_stats[attr][1]/total*100:.1f}% positive)")
+    
+    # Create biased training and test sets
+    np.random.shuffle(valid_indices)
+    
+    # Ensure we have enough data
+    total_needed = train_size + test_size
+    if len(valid_indices) < total_needed:
+        print(f"Warning: Only {len(valid_indices)} samples available, need {total_needed}")
+        ratio = len(valid_indices) / total_needed
+        train_size = int(train_size * ratio)
+        test_size = len(valid_indices) - train_size
+    
+    def create_biased_subset(indices_with_attrs, size, bias_strength, subset_name):
+        """Create a biased subset of the data."""
+        biased_indices = []
+        
+        for i, (orig_idx, attr_vals) in enumerate(indices_with_attrs[:size*2]):  # Sample from more to allow selection
+            if len(biased_indices) >= size:
+                break
+                
+            # For each bias pair, decide if this sample follows the bias
+            follows_bias = True
+            for attr1, attr2 in bias_pairs:
+                # Bias: attr1=1 should correlate with attr2=1
+                if attr_vals[attr1] == 1:
+                    # This sample has attr1=1, should it also have attr2=1?
+                    if np.random.random() < bias_strength:
+                        if attr_vals[attr2] != 1:
+                            follows_bias = False
+                            break
+                    else:
+                        if attr_vals[attr2] != 0:
+                            follows_bias = False
+                            break
+                else:
+                    # This sample has attr1=0, bias doesn't apply strongly
+                    pass
+            
+            if follows_bias:
+                biased_indices.append(orig_idx)
+        
+        # If we don't have enough biased samples, add random ones
+        remaining_indices = [idx for idx, _ in indices_with_attrs[size*2:]]
+        while len(biased_indices) < size and remaining_indices:
+            biased_indices.append(remaining_indices.pop())
+        
+        print(f"  {subset_name}: {len(biased_indices)} samples")
+        return biased_indices[:size]
+    
+    print(f"\nCreating biased subsets:")
+    train_indices = create_biased_subset(valid_indices, train_size, train_bias, "Train")
+    test_start = min(len(valid_indices), train_size * 2)
+    test_indices = create_biased_subset(valid_indices[test_start:], test_size, test_bias, "Test")
+    
+    # Create multi-attribute datasets
+    class MultiAttributeCelebADataset(Dataset):
+        """Dataset with multiple biased attribute pairs."""
+        
+        def __init__(self, celeba_dataset, indices, bias_pairs, additional_attrs, attr_indices, transform=None):
+            self.celeba_dataset = celeba_dataset
+            self.indices = indices
+            self.bias_pairs = bias_pairs
+            self.additional_attrs = additional_attrs
+            self.attr_indices = attr_indices
+            self.transform = transform
+            
+        def __len__(self):
+            return len(self.indices)
+            
+        def __getitem__(self, idx):
+            orig_idx = self.indices[idx]
+            image, attrs = self.celeba_dataset[orig_idx]
+            
+            # Extract all attribute values
+            attr_values = {}
+            for attr in self.attr_indices:
+                attr_values[attr] = attrs[self.attr_indices[attr]].item()
+            
+            # For simplicity, use first bias pair as primary classification target
+            primary_attr = self.bias_pairs[0][0]
+            label = attr_values[primary_attr]
+            
+            return image, label, {
+                'attributes': attr_values,
+                'bias_pairs': self.bias_pairs,
+                'additional_attrs': self.additional_attrs
+            }
+    
+    train_dataset = MultiAttributeCelebADataset(
+        full_dataset, train_indices, bias_pairs, additional_attrs, attr_indices, transform
+    )
+    
+    test_dataset = MultiAttributeCelebADataset(
+        full_dataset, test_indices, bias_pairs, additional_attrs, attr_indices, transform
+    )
+    
+    # Create metadata
+    metadata = {
+        'bias_pairs': bias_pairs,
+        'additional_attrs': additional_attrs,
+        'primary_target': bias_pairs[0][0],
+        'train_bias': train_bias,
+        'test_bias': test_bias,
+        'train_size': len(train_indices),
+        'test_size': len(test_indices),
+        'image_size': image_size,
+        'seed': seed,
+        'attribute_stats': attr_stats,
+        'dataset_type': 'multi_attribute_celeba'
+    }
+    
+    return train_dataset, test_dataset, metadata
+
+
+def save_multi_attribute_dataset(train_dataset, test_dataset, metadata, output_dir: str):
+    """Save multi-attribute dataset to disk."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Save datasets
+    torch.save(train_dataset, os.path.join(output_dir, "train_dataset.pt"))
+    torch.save(test_dataset, os.path.join(output_dir, "test_dataset.pt"))
+    
+    # Save metadata
+    with open(os.path.join(output_dir, "metadata.json"), "w") as f:
+        json.dump(metadata, f, indent=2)
+    
+    print(f"Multi-attribute dataset saved to {output_dir}")
+
+
+def load_multi_attribute_dataset(data_dir: str):
+    """Load multi-attribute dataset from disk."""
+    train_dataset = torch.load(os.path.join(data_dir, "train_dataset.pt"))
+    test_dataset = torch.load(os.path.join(data_dir, "test_dataset.pt"))
+    
+    with open(os.path.join(data_dir, "metadata.json"), "r") as f:
+        metadata = json.load(f)
+    
+    return train_dataset, test_dataset, metadata
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate biased real CelebA dataset for bias research")
     parser.add_argument("--attr1", type=str, default="Male",
@@ -483,50 +720,106 @@ def main():
                        help="Output directory for biased dataset")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     
+    # Multi-attribute support
+    parser.add_argument("--multi_attribute", action="store_true", 
+                       help="Create multi-attribute bias dataset")
+    parser.add_argument("--bias_pairs", type=str, nargs="+", 
+                       default=["Male,Blond_Hair", "Young,Heavy_Makeup"],
+                       help="Bias pairs in format 'attr1,attr2' (for multi-attribute mode)")
+    parser.add_argument("--additional_attrs", type=str, nargs="+",
+                       default=["Attractive", "Eyeglasses", "Smiling"],
+                       help="Additional attributes without bias (for multi-attribute mode)")
+    
     args = parser.parse_args()
     
-    # Validate attribute combination
-    if args.attr1 == args.attr2:
-        raise ValueError("attr1 and attr2 must be different")
-    
-    print("Generating Biased Real CelebA Dataset")
-    print("=" * 45)
-    print(f"Target attribute (attr1): {args.attr1}")
-    print(f"Biasing attribute (attr2): {args.attr2}")
-    print(f"Train bias: {args.train_bias}")
-    print(f"Test bias: {args.test_bias}")
-    print(f"Train size: {args.train_size}")
-    print(f"Test size: {args.test_size}")
-    print(f"Image size: {args.image_size}")
-    print(f"Seed: {args.seed}")
-    print(f"CelebA data root: {args.data_root}")
-    
-    # Create datasets
-    train_dataset, test_dataset, metadata = create_biased_real_celeba_datasets(
-        data_root=args.data_root,
-        attr1_name=args.attr1,
-        attr2_name=args.attr2,
-        train_bias=args.train_bias,
-        test_bias=args.test_bias,
-        train_size=args.train_size,
-        test_size=args.test_size,
-        image_size=args.image_size,
-        seed=args.seed
-    )
-    
-    # Analyze bias
-    train_analysis = analyze_dataset_bias(train_dataset, "Training")
-    test_analysis = analyze_dataset_bias(test_dataset, "Test")
-    
-    # Add analysis to metadata
-    metadata['train_analysis'] = train_analysis
-    metadata['test_analysis'] = test_analysis
-    
-    # Save dataset
-    save_real_celeba_dataset(train_dataset, test_dataset, metadata, args.output_dir)
-    
-    print(f"\nDataset creation completed!")
-    print(f"Saved to: {args.output_dir}")
+    if args.multi_attribute:
+        # Multi-attribute mode
+        print("Generating Multi-Attribute Biased Real CelebA Dataset")
+        print("=" * 55)
+        
+        # Parse bias pairs
+        bias_pairs = []
+        for pair_str in args.bias_pairs:
+            attr1, attr2 = pair_str.split(',')
+            bias_pairs.append((attr1.strip(), attr2.strip()))
+        
+        print(f"Bias pairs: {bias_pairs}")
+        print(f"Additional attributes: {args.additional_attrs}")
+        print(f"Train bias: {args.train_bias}")
+        print(f"Test bias: {args.test_bias}")
+        print(f"Train size: {args.train_size}")
+        print(f"Test size: {args.test_size}")
+        print(f"Image size: {args.image_size}")
+        print(f"Seed: {args.seed}")
+        print(f"CelebA data root: {args.data_root}")
+        
+        # Create multi-attribute dataset
+        train_dataset, test_dataset, metadata = create_multi_attribute_celeba_dataset(
+            data_root=args.data_root,
+            bias_pairs=bias_pairs,
+            additional_attrs=args.additional_attrs,
+            train_bias=args.train_bias,
+            test_bias=args.test_bias,
+            train_size=args.train_size,
+            test_size=args.test_size,
+            image_size=args.image_size,
+            seed=args.seed
+        )
+        
+        # Create output directory name
+        pair_names = "_".join([f"{p[0]}-{p[1]}" for p in bias_pairs])
+        output_dir = f"{args.output_dir}_multi_{pair_names}_tb{args.train_bias}_testb{args.test_bias}"
+        
+        # Save dataset
+        save_multi_attribute_dataset(train_dataset, test_dataset, metadata, output_dir)
+        
+        print(f"\nMulti-attribute dataset creation completed!")
+        print(f"Saved to: {output_dir}")
+        
+    else:
+        # Single attribute mode (original functionality)
+        # Validate attribute combination
+        if args.attr1 == args.attr2:
+            raise ValueError("attr1 and attr2 must be different")
+        
+        print("Generating Biased Real CelebA Dataset")
+        print("=" * 45)
+        print(f"Target attribute (attr1): {args.attr1}")
+        print(f"Biasing attribute (attr2): {args.attr2}")
+        print(f"Train bias: {args.train_bias}")
+        print(f"Test bias: {args.test_bias}")
+        print(f"Train size: {args.train_size}")
+        print(f"Test size: {args.test_size}")
+        print(f"Image size: {args.image_size}")
+        print(f"Seed: {args.seed}")
+        print(f"CelebA data root: {args.data_root}")
+        
+        # Create datasets
+        train_dataset, test_dataset, metadata = create_biased_real_celeba_datasets(
+            data_root=args.data_root,
+            attr1_name=args.attr1,
+            attr2_name=args.attr2,
+            train_bias=args.train_bias,
+            test_bias=args.test_bias,
+            train_size=args.train_size,
+            test_size=args.test_size,
+            image_size=args.image_size,
+            seed=args.seed
+        )
+        
+        # Analyze bias
+        train_analysis = analyze_dataset_bias(train_dataset, "Training")
+        test_analysis = analyze_dataset_bias(test_dataset, "Test")
+        
+        # Add analysis to metadata
+        metadata['train_analysis'] = train_analysis
+        metadata['test_analysis'] = test_analysis
+        
+        # Save dataset
+        save_real_celeba_dataset(train_dataset, test_dataset, metadata, args.output_dir)
+        
+        print(f"\nDataset creation completed!")
+        print(f"Saved to: {args.output_dir}")
 
 
 if __name__ == "__main__":

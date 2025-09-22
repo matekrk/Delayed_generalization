@@ -107,13 +107,28 @@ class WaterbirdsTrainer:
         self.device = device
         self.method = method
         
-        # Setup optimizer
-        self.optimizer = optim.SGD(
-            model.parameters(),
-            lr=learning_rate,
-            momentum=0.9,
-            weight_decay=weight_decay
-        )
+        # Setup optimizer using enhanced optimizers
+        try:
+            # Try to use enhanced optimizer from our reorganized structure
+            from optimization import get_default_optimizer
+            self.optimizer = get_default_optimizer(
+                model, 
+                phenomenon_type='simplicity_bias',
+                optimizer_type='enhanced_sgd',
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                momentum=0.9
+            )
+            print("Using enhanced SGD optimizer for Waterbirds experiments")
+        except ImportError:
+            # Fallback to standard SGD
+            self.optimizer = optim.SGD(
+                model.parameters(),
+                lr=learning_rate,
+                momentum=0.9,
+                weight_decay=weight_decay
+            )
+            print("Using standard SGD optimizer")
         
         # Setup loss function
         if method == "group_dro":
@@ -321,10 +336,33 @@ class WaterbirdsTrainer:
         plt.close()
 
 
-def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
-    """Create data loaders from saved dataset"""
+def create_data_loaders(data_dir: str, batch_size: int = 32, data_fraction: float = 1.0) -> Tuple[DataLoader, DataLoader]:
+    """Create data loaders from saved dataset with optional data fraction"""
     # Load dataset
     train_dataset, test_dataset, metadata = load_synthetic_waterbirds_dataset(data_dir)
+    
+    original_train_size = len(train_dataset)
+    original_test_size = len(test_dataset)
+    
+    # Apply data fraction if specified
+    if data_fraction < 1.0:
+        print(f"Using {data_fraction:.2%} of the dataset")
+        
+        # Sample fraction of training data
+        train_size = int(original_train_size * data_fraction)
+        train_indices = torch.randperm(original_train_size)[:train_size]
+        train_dataset = [train_dataset[i] for i in train_indices]
+        
+        # Sample fraction of test data
+        test_size = int(original_test_size * data_fraction)
+        test_indices = torch.randperm(original_test_size)[:test_size]
+        test_dataset = [test_dataset[i] for i in test_indices]
+        
+        print(f"Reduced train size: {len(train_dataset)} (from {original_train_size})")
+        print(f"Reduced test size: {len(test_dataset)} (from {original_test_size})")
+    
+    print(f"Final train size: {len(train_dataset)}")
+    print(f"Final test size: {len(test_dataset)}")
     
     # Convert to tensor datasets
     def dataset_to_tensors(dataset):
@@ -393,9 +431,18 @@ def main():
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--group_dro_step_size", type=float, default=0.01, help="Group DRO step size")
     parser.add_argument("--save_dir", type=str, default="./waterbirds_results", help="Directory to save results")
+    parser.add_argument("--results_dir", type=str, default=None, 
+                       help="Alternative name for save_dir (same functionality)")
+    parser.add_argument("--data_fraction", type=float, default=1.0, 
+                       help="Fraction of dataset to use (0.0-1.0, default: 1.0 for full dataset)")
+    parser.add_argument("--use_wandb", action="store_true", help="Enable wandb logging")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     
     args = parser.parse_args()
+    
+    # Handle alternative results_dir argument
+    if args.results_dir is not None:
+        args.save_dir = args.results_dir
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -408,17 +455,19 @@ def main():
     print("=" * 40)
     print(f"Method: {args.method}")
     print(f"Data directory: {args.data_dir}")
+    print(f"Data fraction: {args.data_fraction:.2%}")
     print(f"Device: {device}")
     print(f"Epochs: {args.epochs}")
     print(f"Batch size: {args.batch_size}")
     print(f"Learning rate: {args.learning_rate}")
     print(f"Weight decay: {args.weight_decay}")
+    print(f"Use wandb: {args.use_wandb}")
     if args.method == "group_dro":
         print(f"Group DRO step size: {args.group_dro_step_size}")
     
     # Create data loaders
     print("\nLoading dataset...")
-    train_loader, test_loader = create_data_loaders(args.data_dir, args.batch_size)
+    train_loader, test_loader = create_data_loaders(args.data_dir, args.batch_size, args.data_fraction)
     print(f"Train batches: {len(train_loader)}")
     print(f"Test batches: {len(test_loader)}")
     
