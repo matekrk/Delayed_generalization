@@ -15,6 +15,10 @@ from typing import Dict, List, Optional, Any, Union
 import json
 from pathlib import Path
 import logging
+from scipy import stats
+from sklearn.feature_selection import mutual_info_regression
+from collections import defaultdict
+import torch.nn.functional as F
 
 
 class DelayedGeneralizationLogger:
@@ -70,8 +74,16 @@ class DelayedGeneralizationLogger:
             'train_acc': [],
             'test_acc': [],
             'epochs': [],
-            'generalization_gap': []  # Add this to base metrics
+            'generalization_gap': [],  # Add this to base metrics
+            'gradient_directions': [],  # For gradient direction analysis
+            'mutual_information': [],  # For mutual information tracking
+            'statistical_significance': []  # For significance testing
         }
+        
+        # Enhanced tracking for sophisticated analysis
+        self.gradient_history = []
+        self.feature_representations = []
+        self.seed_results = {}  # For meta-analysis across seeds
         
         # Phenomenon-specific metrics
         if phenomenon_type == 'grokking':
@@ -388,12 +400,14 @@ class DelayedGeneralizationLogger:
         return weight_metrics
     
     def _analyze_gradients(self, model: torch.nn.Module) -> Dict[str, float]:
-        """Analyze gradient norms and distributions."""
+        """Analyze gradient norms and distributions with enhanced direction analysis."""
         
         gradient_metrics = {}
         layer_grad_norms = {}
         
         total_grad_norm = 0
+        all_gradients = []
+        layer_gradients = {}
         
         for name, param in model.named_parameters():
             if param.requires_grad and param.grad is not None:
@@ -402,6 +416,11 @@ class DelayedGeneralizationLogger:
                 layer_grad_norms[name] = grad_norm
                 
                 total_grad_norm += grad_norm ** 2
+                
+                # Store gradients for direction analysis
+                grad_flat = param.grad.detach().flatten()
+                all_gradients.append(grad_flat)
+                layer_gradients[name] = grad_flat
                 
                 # Distribution metrics
                 gradient_metrics[f'{name}_grad_norm'] = grad_norm
@@ -414,7 +433,531 @@ class DelayedGeneralizationLogger:
             gradient_metrics['avg_grad_norm'] = np.mean(list(layer_grad_norms.values()))
             gradient_metrics['std_grad_norm'] = np.std(list(layer_grad_norms.values()))
         
+        # Enhanced: Gradient direction analysis
+        if len(all_gradients) > 0:
+            all_grads_tensor = torch.cat(all_gradients)
+            self.gradient_history.append(all_grads_tensor.cpu().numpy())
+            
+            # Gradient direction consistency
+            if len(self.gradient_history) > 1:
+                current_grad = self.gradient_history[-1]
+                prev_grad = self.gradient_history[-2]
+                
+                # Cosine similarity between consecutive gradient updates
+                cos_sim = np.dot(current_grad, prev_grad) / (
+                    np.linalg.norm(current_grad) * np.linalg.norm(prev_grad) + 1e-8
+                )
+                gradient_metrics['gradient_direction_consistency'] = cos_sim
+                
+                # Gradient direction variance over recent steps
+                if len(self.gradient_history) > 10:
+                    recent_grads = np.array(self.gradient_history[-10:])
+                    pairwise_similarities = []
+                    for i in range(len(recent_grads)):
+                        for j in range(i+1, len(recent_grads)):
+                            sim = np.dot(recent_grads[i], recent_grads[j]) / (
+                                np.linalg.norm(recent_grads[i]) * np.linalg.norm(recent_grads[j]) + 1e-8
+                            )
+                            pairwise_similarities.append(sim)
+                    
+                    gradient_metrics['gradient_direction_variance'] = np.var(pairwise_similarities)
+                    gradient_metrics['gradient_direction_stability'] = np.mean(pairwise_similarities)
+        
         return gradient_metrics
+    
+    def analyze_mutual_information(
+        self,
+        epoch: int,
+        model: torch.nn.Module,
+        data_loader: torch.utils.data.DataLoader,
+        max_samples: int = 1000
+    ) -> Dict[str, float]:
+        """
+        Analyze mutual information between features and targets.
+        
+        Args:
+            epoch: Current epoch
+            model: The model to analyze
+            data_loader: Data loader for analysis
+            max_samples: Maximum number of samples to use for efficiency
+            
+        Returns:
+            Dictionary of mutual information metrics
+        """
+        
+        model.eval()
+        features_list = []
+        targets_list = []
+        
+        with torch.no_grad():
+            for i, (inputs, targets) in enumerate(data_loader):
+                if i * data_loader.batch_size >= max_samples:
+                    break
+                    
+                if hasattr(model, 'features'):
+                    # For models with explicit feature extractor
+                    features = model.features(inputs)
+                    features = features.view(features.size(0), -1)
+                else:
+                    # Generic approach: use penultimate layer
+                    features = self._extract_penultimate_features(model, inputs)
+                
+                features_list.append(features.cpu().numpy())
+                targets_list.append(targets.cpu().numpy())
+        
+        if not features_list:
+            return {}
+            
+        # Concatenate all features and targets
+        all_features = np.concatenate(features_list, axis=0)
+        all_targets = np.concatenate(targets_list, axis=0)
+        
+        mi_metrics = {}
+        
+        # Compute mutual information for different feature subsets
+        if all_features.shape[1] > 1:
+            # Subsample features for computational efficiency
+            n_features = min(all_features.shape[1], 100)
+            feature_indices = np.random.choice(all_features.shape[1], n_features, replace=False)
+            selected_features = all_features[:, feature_indices]
+            
+            try:
+                # Mutual information between features and targets
+                mi_scores = mutual_info_regression(selected_features, all_targets, random_state=42)
+                
+                mi_metrics['mutual_info_mean'] = np.mean(mi_scores)
+                mi_metrics['mutual_info_std'] = np.std(mi_scores)
+                mi_metrics['mutual_info_max'] = np.max(mi_scores)
+                mi_metrics['mutual_info_min'] = np.min(mi_scores)
+                
+                # Store for trend analysis
+                self.metrics_history['mutual_information'].append({
+                    'epoch': epoch,
+                    'mi_mean': np.mean(mi_scores),
+                    'mi_scores': mi_scores.tolist()
+                })
+                
+                # Analyze trends if we have enough history
+                if len(self.metrics_history['mutual_information']) > 5:
+                    recent_mi = [entry['mi_mean'] for entry in self.metrics_history['mutual_information'][-5:]]
+                    mi_trend = np.polyfit(range(len(recent_mi)), recent_mi, 1)[0]
+                    mi_metrics['mutual_info_trend'] = mi_trend
+                    
+            except Exception as e:
+                logging.warning(f"Failed to compute mutual information: {e}")
+        
+        model.train()
+        return mi_metrics
+    
+    def _extract_penultimate_features(self, model: torch.nn.Module, inputs: torch.Tensor) -> torch.Tensor:
+        """Extract features from the penultimate layer of the model."""
+        
+        features = inputs
+        modules = list(model.children())
+        
+        # Forward through all but the last layer
+        for module in modules[:-1]:
+            features = module(features)
+            
+        # Flatten if needed
+        if len(features.shape) > 2:
+            features = features.view(features.size(0), -1)
+            
+        return features
+    
+    def compute_statistical_significance(
+        self,
+        epoch: int,
+        current_metrics: Dict[str, float],
+        baseline_metrics: Optional[Dict[str, float]] = None,
+        min_history_length: int = 50
+    ) -> Dict[str, float]:
+        """
+        Compute statistical significance of current performance vs baseline/history.
+        
+        Args:
+            epoch: Current epoch
+            current_metrics: Current performance metrics
+            baseline_metrics: Optional baseline to compare against
+            min_history_length: Minimum history length for statistical tests
+            
+        Returns:
+            Dictionary of statistical significance metrics
+        """
+        
+        sig_metrics = {}
+        
+        # We need sufficient history for meaningful statistical tests
+        if len(self.metrics_history['test_acc']) < min_history_length:
+            return sig_metrics
+        
+        # Test statistical significance of current performance vs recent average
+        recent_window = min(20, len(self.metrics_history['test_acc']) // 4)
+        recent_accs = self.metrics_history['test_acc'][-recent_window:]
+        
+        if 'test_acc' in current_metrics:
+            current_acc = current_metrics['test_acc']
+            
+            # One-sample t-test against recent performance
+            if len(recent_accs) > 3:
+                t_stat, p_value = stats.ttest_1samp(recent_accs, current_acc)
+                sig_metrics['test_acc_t_stat'] = t_stat
+                sig_metrics['test_acc_p_value'] = p_value
+                sig_metrics['test_acc_significant'] = 1 if p_value < 0.05 else 0
+        
+        # Test for trend significance
+        if len(self.metrics_history['test_acc']) > 30:
+            epochs_subset = range(len(self.metrics_history['test_acc']))
+            trend_slope, _, _, p_value, _ = stats.linregress(
+                epochs_subset, self.metrics_history['test_acc']
+            )
+            sig_metrics['accuracy_trend_slope'] = trend_slope
+            sig_metrics['accuracy_trend_p_value'] = p_value
+            sig_metrics['accuracy_trend_significant'] = 1 if p_value < 0.05 else 0
+        
+        # Compare against baseline if provided
+        if baseline_metrics and 'test_acc' in baseline_metrics:
+            baseline_acc = baseline_metrics['test_acc']
+            recent_accs_array = np.array(recent_accs)
+            
+            # Test if recent performance is significantly different from baseline
+            t_stat, p_value = stats.ttest_1samp(recent_accs_array, baseline_acc)
+            sig_metrics['baseline_comparison_t_stat'] = t_stat
+            sig_metrics['baseline_comparison_p_value'] = p_value
+            sig_metrics['baseline_comparison_significant'] = 1 if p_value < 0.05 else 0
+            
+            # Effect size (Cohen's d)
+            pooled_std = np.std(recent_accs_array)
+            if pooled_std > 0:
+                cohens_d = (np.mean(recent_accs_array) - baseline_acc) / pooled_std
+                sig_metrics['baseline_comparison_effect_size'] = cohens_d
+        
+        # Store statistical significance history
+        self.metrics_history['statistical_significance'].append({
+            'epoch': epoch,
+            'significance_metrics': sig_metrics
+        })
+        
+        return sig_metrics
+    
+    def log_seed_result(self, seed: int, final_metrics: Dict[str, Any]):
+        """
+        Log results for a specific seed for meta-analysis.
+        
+        Args:
+            seed: Random seed used for this run
+            final_metrics: Final metrics achieved with this seed
+        """
+        
+        self.seed_results[seed] = {
+            'final_metrics': final_metrics,
+            'metrics_history': {
+                key: list(value) for key, value in self.metrics_history.items()
+                if isinstance(value, list) and len(value) > 0
+            },
+            'phase_transitions': list(self.phase_transitions)
+        }
+        
+        # Log seed-specific metrics to wandb
+        wandb.log({
+            f'seed_{seed}_final_test_acc': final_metrics.get('test_acc', 0),
+            f'seed_{seed}_final_train_acc': final_metrics.get('train_acc', 0),
+            f'seed_{seed}_num_transitions': len(self.phase_transitions)
+        })
+    
+    @classmethod
+    def perform_meta_analysis(
+        cls, 
+        project_name: str, 
+        phenomenon_type: str,
+        seed_results: Dict[int, Dict[str, Any]],
+        save_to_wandb: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Perform meta-analysis across multiple seed runs.
+        
+        Args:
+            project_name: WandB project name
+            phenomenon_type: Type of phenomenon studied
+            seed_results: Dictionary mapping seeds to their results
+            save_to_wandb: Whether to save results to wandb
+            
+        Returns:
+            Meta-analysis results
+        """
+        
+        if len(seed_results) < 2:
+            logging.warning("Need at least 2 seed results for meaningful meta-analysis")
+            return {}
+        
+        meta_results = {
+            'num_seeds': len(seed_results),
+            'phenomenon_type': phenomenon_type
+        }
+        
+        # Aggregate final performance metrics
+        final_test_accs = []
+        final_train_accs = []
+        num_transitions = []
+        
+        for seed, results in seed_results.items():
+            final_metrics = results.get('final_metrics', {})
+            final_test_accs.append(final_metrics.get('test_acc', 0))
+            final_train_accs.append(final_metrics.get('train_acc', 0))
+            num_transitions.append(len(results.get('phase_transitions', [])))
+        
+        # Statistical analysis of final performance
+        if final_test_accs:
+            meta_results.update({
+                'test_acc_mean': np.mean(final_test_accs),
+                'test_acc_std': np.std(final_test_accs),
+                'test_acc_min': np.min(final_test_accs),
+                'test_acc_max': np.max(final_test_accs),
+                'test_acc_median': np.median(final_test_accs),
+                'test_acc_ci_95': cls._compute_confidence_interval(final_test_accs, 0.95)
+            })
+        
+        if final_train_accs:
+            meta_results.update({
+                'train_acc_mean': np.mean(final_train_accs),
+                'train_acc_std': np.std(final_train_accs),
+                'train_acc_min': np.min(final_train_accs),
+                'train_acc_max': np.max(final_train_accs)
+            })
+        
+        # Analyze phase transitions
+        if num_transitions:
+            meta_results.update({
+                'transitions_mean': np.mean(num_transitions),
+                'transitions_std': np.std(num_transitions),
+                'transitions_mode': stats.mode(num_transitions)[0][0] if len(num_transitions) > 1 else num_transitions[0]
+            })
+        
+        # Analyze convergence consistency
+        # Look at the variance in final epochs across seeds
+        final_epochs = []
+        for results in seed_results.values():
+            history = results.get('metrics_history', {})
+            if 'epochs' in history and history['epochs']:
+                final_epochs.append(history['epochs'][-1])
+        
+        if final_epochs:
+            meta_results['convergence_consistency'] = 1.0 / (1.0 + np.std(final_epochs))
+        
+        # Phenomenon-specific meta-analysis
+        if phenomenon_type == 'grokking':
+            meta_results.update(cls._grokking_meta_analysis(seed_results))
+        elif phenomenon_type == 'simplicity_bias':
+            meta_results.update(cls._bias_meta_analysis(seed_results))
+        elif phenomenon_type == 'phase_transitions':
+            meta_results.update(cls._transition_meta_analysis(seed_results))
+        
+        # Statistical robustness metrics
+        if len(final_test_accs) >= 3:
+            # Test for outliers using IQR method
+            q75, q25 = np.percentile(final_test_accs, [75, 25])
+            iqr = q75 - q25
+            lower_bound = q25 - 1.5 * iqr
+            upper_bound = q75 + 1.5 * iqr
+            
+            outliers = [acc for acc in final_test_accs if acc < lower_bound or acc > upper_bound]
+            meta_results['outlier_fraction'] = len(outliers) / len(final_test_accs)
+            meta_results['result_stability'] = 1.0 - meta_results['outlier_fraction']
+        
+        if save_to_wandb:
+            # Create a new wandb run for meta-analysis
+            meta_run = wandb.init(
+                project=project_name,
+                name=f"meta_analysis_{phenomenon_type}",
+                job_type="meta_analysis",
+                tags=['meta_analysis', phenomenon_type]
+            )
+            
+            wandb.log(meta_results)
+            
+            # Create visualization of seed results
+            cls._create_meta_analysis_plots(seed_results, meta_results)
+            
+            wandb.finish()
+        
+        return meta_results
+    
+    @staticmethod
+    def _compute_confidence_interval(data: List[float], confidence: float = 0.95) -> List[float]:
+        """Compute confidence interval for the mean."""
+        
+        if len(data) < 2:
+            return [np.mean(data), np.mean(data)]
+        
+        alpha = 1 - confidence
+        mean = np.mean(data)
+        std = np.std(data, ddof=1)
+        n = len(data)
+        
+        # Use t-distribution for small samples
+        t_val = stats.t.ppf(1 - alpha/2, n - 1)
+        margin = t_val * std / np.sqrt(n)
+        
+        return [mean - margin, mean + margin]
+    
+    @staticmethod
+    def _grokking_meta_analysis(seed_results: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
+        """Perform grokking-specific meta-analysis."""
+        
+        meta = {}
+        
+        # Analyze grokking epochs across seeds
+        grokking_epochs = []
+        grokking_detected = []
+        
+        for results in seed_results.values():
+            final_metrics = results.get('final_metrics', {})
+            grokking_epochs.append(final_metrics.get('grokking_epoch', None))
+            grokking_detected.append(final_metrics.get('grokking_detected', False))
+        
+        # Filter out None values
+        valid_grokking_epochs = [e for e in grokking_epochs if e is not None]
+        
+        if valid_grokking_epochs:
+            meta.update({
+                'grokking_epoch_mean': np.mean(valid_grokking_epochs),
+                'grokking_epoch_std': np.std(valid_grokking_epochs),
+                'grokking_success_rate': sum(grokking_detected) / len(grokking_detected)
+            })
+        
+        return meta
+    
+    @staticmethod
+    def _bias_meta_analysis(seed_results: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
+        """Perform bias-specific meta-analysis."""
+        
+        meta = {}
+        
+        # Analyze worst group accuracies
+        worst_group_accs = []
+        bias_scores = []
+        
+        for results in seed_results.values():
+            final_metrics = results.get('final_metrics', {})
+            if 'worst_group_acc' in final_metrics:
+                worst_group_accs.append(final_metrics['worst_group_acc'])
+            if 'bias_score' in final_metrics:
+                bias_scores.append(final_metrics['bias_score'])
+        
+        if worst_group_accs:
+            meta.update({
+                'worst_group_acc_mean': np.mean(worst_group_accs),
+                'worst_group_acc_std': np.std(worst_group_accs),
+                'bias_mitigation_consistency': 1.0 / (1.0 + np.std(worst_group_accs))
+            })
+        
+        return meta
+    
+    @staticmethod
+    def _transition_meta_analysis(seed_results: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
+        """Perform phase transition specific meta-analysis."""
+        
+        meta = {}
+        
+        # Analyze emergent abilities
+        emerged_abilities = []
+        transition_epochs = []
+        
+        for results in seed_results.values():
+            final_metrics = results.get('final_metrics', {})
+            if 'emerged_abilities_count' in final_metrics:
+                emerged_abilities.append(final_metrics['emerged_abilities_count'])
+            
+            # Extract transition epochs
+            transitions = results.get('phase_transitions', [])
+            if transitions:
+                transition_epochs.extend([t['epoch'] for t in transitions])
+        
+        if emerged_abilities:
+            meta.update({
+                'emergent_abilities_mean': np.mean(emerged_abilities),
+                'emergent_abilities_std': np.std(emerged_abilities),
+                'emergence_consistency': 1.0 / (1.0 + np.std(emerged_abilities))
+            })
+        
+        if transition_epochs:
+            meta.update({
+                'transition_epochs_mean': np.mean(transition_epochs),
+                'transition_epochs_std': np.std(transition_epochs)
+            })
+        
+        return meta
+    
+    @staticmethod
+    def _create_meta_analysis_plots(seed_results: Dict[int, Dict[str, Any]], meta_results: Dict[str, Any]):
+        """Create visualization plots for meta-analysis."""
+        
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        fig.suptitle('Meta-Analysis Across Seeds', fontsize=16)
+        
+        # Plot 1: Final test accuracy distribution
+        final_test_accs = []
+        for results in seed_results.values():
+            final_metrics = results.get('final_metrics', {})
+            final_test_accs.append(final_metrics.get('test_acc', 0))
+        
+        if final_test_accs:
+            axes[0, 0].hist(final_test_accs, bins=min(10, len(final_test_accs)), alpha=0.7, edgecolor='black')
+            axes[0, 0].axvline(np.mean(final_test_accs), color='red', linestyle='--', label=f'Mean: {np.mean(final_test_accs):.3f}')
+            axes[0, 0].set_xlabel('Final Test Accuracy')
+            axes[0, 0].set_ylabel('Count')
+            axes[0, 0].set_title('Final Test Accuracy Distribution')
+            axes[0, 0].legend()
+            axes[0, 0].grid(True, alpha=0.3)
+        
+        # Plot 2: Training curves for all seeds
+        for seed, results in seed_results.items():
+            history = results.get('metrics_history', {})
+            if 'epochs' in history and 'test_acc' in history:
+                epochs = history['epochs']
+                test_acc = history['test_acc']
+                axes[0, 1].plot(epochs, test_acc, alpha=0.6, label=f'Seed {seed}')
+        
+        axes[0, 1].set_xlabel('Epoch')
+        axes[0, 1].set_ylabel('Test Accuracy')
+        axes[0, 1].set_title('Training Curves (All Seeds)')
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # Plot 3: Phase transitions count
+        num_transitions = [len(results.get('phase_transitions', [])) for results in seed_results.values()]
+        if num_transitions:
+            unique_counts, counts = np.unique(num_transitions, return_counts=True)
+            axes[1, 0].bar(unique_counts, counts, alpha=0.7, edgecolor='black')
+            axes[1, 0].set_xlabel('Number of Phase Transitions')
+            axes[1, 0].set_ylabel('Number of Seeds')
+            axes[1, 0].set_title('Phase Transitions Distribution')
+            axes[1, 0].grid(True, alpha=0.3)
+        
+        # Plot 4: Convergence consistency
+        final_epochs = []
+        for results in seed_results.values():
+            history = results.get('metrics_history', {})
+            if 'epochs' in history and history['epochs']:
+                final_epochs.append(history['epochs'][-1])
+        
+        if final_epochs and len(set(final_epochs)) > 1:
+            axes[1, 1].hist(final_epochs, bins=min(10, len(final_epochs)), alpha=0.7, edgecolor='black')
+            axes[1, 1].axvline(np.mean(final_epochs), color='red', linestyle='--', label=f'Mean: {np.mean(final_epochs):.0f}')
+            axes[1, 1].set_xlabel('Final Epoch')
+            axes[1, 1].set_ylabel('Count')
+            axes[1, 1].set_title('Convergence Epoch Distribution')
+            axes[1, 1].legend()
+            axes[1, 1].grid(True, alpha=0.3)
+        else:
+            axes[1, 1].text(0.5, 0.5, 'All seeds converged\nat same epoch', 
+                           transform=axes[1, 1].transAxes, ha='center', va='center')
+            axes[1, 1].set_title('Convergence Consistency')
+        
+        plt.tight_layout()
+        
+        # Log the plot to wandb
+        wandb.log({"meta_analysis_visualization": wandb.Image(fig)})
+        plt.close(fig)
     
     def create_training_dynamics_plot(self, save_to_wandb: bool = True) -> plt.Figure:
         """Create comprehensive training dynamics plot."""
@@ -804,53 +1347,117 @@ def log_dataset_info(logger: DelayedGeneralizationLogger, dataset_info: Dict[str
         wandb.log({'dataset_correlation_strength': dataset_info['correlation_strength']})
 
 
-def create_hyperparameter_sweep_config(phenomenon_type: str) -> Dict[str, Any]:
-    """Create wandb sweep configuration for different phenomena."""
+def create_hyperparameter_sweep_config(phenomenon_type: str, advanced: bool = False) -> Dict[str, Any]:
+    """Create wandb sweep configuration for different phenomena with enhanced optimizer support."""
     
     if phenomenon_type == 'grokking':
-        return {
+        base_config = {
             'method': 'grid',
             'parameters': {
-                'learning_rate': {'values': [1e-4, 1e-3, 1e-2]},
-                'weight_decay': {'values': [1e-3, 1e-2, 1e-1]},
-                'batch_size': {'values': [128, 256, 512]},
-                'model_size': {'values': [64, 128, 256]},
-                'optimizer': {'values': ['adam', 'adamw', 'sgd']}
+                'learning_rate': {'values': [5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2]},
+                'weight_decay': {'values': [1e-4, 1e-3, 1e-2, 1e-1, 0.5]},
+                'batch_size': {'values': [64, 128, 256, 512]},
+                'model_size': {'values': [64, 128, 256, 512]},
+                'optimizer': {'values': ['adam', 'adamw', 'sgd', 'rmsprop']}
             },
             'metric': {
                 'name': 'best_test_acc',
                 'goal': 'maximize'
             }
         }
+        
+        if advanced:
+            base_config['parameters'].update({
+                'optimizer': {'values': ['adam', 'adamw', 'sgd', 'rmsprop', 'adagrad', 'lion']},
+                'lr_scheduler': {'values': ['cosine', 'step', 'exponential', 'plateau', 'cyclic']},
+                'warmup_steps': {'values': [0, 100, 500, 1000]},
+                'gradient_clip': {'values': [0.0, 0.5, 1.0, 5.0]},
+                'beta1': {'values': [0.8, 0.9, 0.95, 0.99]},
+                'beta2': {'values': [0.95, 0.99, 0.999, 0.9999]},
+                'epsilon': {'values': [1e-8, 1e-7, 1e-6]},
+                'use_ema': {'values': [True, False]},
+                'ema_decay': {'values': [0.99, 0.999, 0.9999]}
+            })
+            base_config['method'] = 'bayes'  # Use Bayesian optimization for advanced configs
+            
+        return base_config
     
     elif phenomenon_type == 'simplicity_bias':
-        return {
+        base_config = {
             'method': 'bayes',
             'parameters': {
                 'learning_rate': {'min': 1e-5, 'max': 1e-1},
                 'weight_decay': {'min': 1e-5, 'max': 1e-1},
                 'dropout': {'min': 0.0, 'max': 0.5},
-                'bias_strength': {'values': [0.7, 0.8, 0.9, 0.95]},
-                'training_method': {'values': ['erm', 'group_dro', 'irm']}
+                'bias_strength': {'values': [0.7, 0.8, 0.9, 0.95, 0.99]},
+                'training_method': {'values': ['erm', 'group_dro', 'irm', 'mixup']},
+                'optimizer': {'values': ['adam', 'adamw', 'sgd']}
             },
             'metric': {
                 'name': 'worst_group_acc',
                 'goal': 'maximize'
             }
         }
+        
+        if advanced:
+            base_config['parameters'].update({
+                'optimizer': {'values': ['adam', 'adamw', 'sgd', 'rmsprop', 'lion']},
+                'lr_scheduler': {'values': ['cosine', 'step', 'exponential', 'plateau']},
+                'gradient_penalty': {'min': 0.0, 'max': 10.0},
+                'label_smoothing': {'min': 0.0, 'max': 0.2},
+                'mixup_alpha': {'min': 0.0, 'max': 2.0},
+                'sam_rho': {'min': 0.0, 'max': 0.5},  # Sharpness-Aware Minimization
+                'use_ema': {'values': [True, False]}
+            })
+            
+        return base_config
     
     elif phenomenon_type == 'phase_transitions':
-        return {
+        base_config = {
             'method': 'random',
             'parameters': {
                 'model_size': {'values': [1e6, 5e6, 1e7, 5e7]},
                 'learning_rate': {'min': 1e-5, 'max': 1e-2},
-                'batch_size': {'values': [32, 64, 128, 256]},
+                'batch_size': {'values': [32, 64, 128, 256, 512]},
                 'data_size': {'values': [1e3, 5e3, 1e4, 5e4]},
-                'warmup_steps': {'min': 0, 'max': 2000}
+                'warmup_steps': {'min': 0, 'max': 2000},
+                'optimizer': {'values': ['adam', 'adamw', 'sgd']}
             },
             'metric': {
                 'name': 'emerged_abilities_count',
+                'goal': 'maximize'
+            }
+        }
+        
+        if advanced:
+            base_config['parameters'].update({
+                'optimizer': {'values': ['adam', 'adamw', 'sgd', 'rmsprop', 'lion']},
+                'lr_scheduler': {'values': ['cosine', 'linear', 'polynomial', 'constant']},
+                'temperature_scaling': {'min': 0.5, 'max': 2.0},
+                'knowledge_distillation': {'values': [True, False]},
+                'progressive_resizing': {'values': [True, False]},
+                'curriculum_learning': {'values': [True, False]}
+            })
+            
+        return base_config
+    
+    # Enhanced continual learning configuration
+    elif phenomenon_type == 'continual_learning':
+        return {
+            'method': 'bayes',
+            'parameters': {
+                'learning_rate': {'min': 1e-5, 'max': 1e-2},
+                'weight_decay': {'min': 1e-5, 'max': 1e-1},
+                'optimizer': {'values': ['adam', 'adamw', 'sgd', 'rmsprop']},
+                'memory_size': {'values': [100, 500, 1000, 2000]},
+                'regularization_strength': {'min': 0.0, 'max': 10.0},
+                'plasticity_factor': {'min': 0.1, 'max': 1.0},
+                'consolidation_method': {'values': ['ewc', 'l2', 'dropout', 'packnet']},
+                'task_order': {'values': ['sequential', 'interleaved', 'random']},
+                'replay_strategy': {'values': ['none', 'random', 'herding', 'gradient_based']}
+            },
+            'metric': {
+                'name': 'average_accuracy_after_all_tasks',
                 'goal': 'maximize'
             }
         }
@@ -861,6 +1468,129 @@ def create_hyperparameter_sweep_config(phenomenon_type: str) -> Dict[str, Any]:
             'parameters': {
                 'learning_rate': {'values': [1e-4, 1e-3, 1e-2]},
                 'batch_size': {'values': [32, 64, 128]},
-                'weight_decay': {'values': [1e-4, 1e-3, 1e-2]}
+                'weight_decay': {'values': [1e-4, 1e-3, 1e-2]},
+                'optimizer': {'values': ['adam', 'adamw', 'sgd']}
             }
         }
+
+
+def create_advanced_optimizer_sweep(
+    phenomenon_type: str,
+    focus_optimizers: Optional[List[str]] = None,
+    include_scheduling: bool = True,
+    include_regularization: bool = True
+) -> Dict[str, Any]:
+    """
+    Create advanced optimizer-focused sweep configuration.
+    
+    Args:
+        phenomenon_type: Type of phenomenon ('grokking', 'simplicity_bias', etc.)
+        focus_optimizers: List of optimizers to focus on, or None for all
+        include_scheduling: Whether to include learning rate scheduling
+        include_regularization: Whether to include advanced regularization techniques
+        
+    Returns:
+        Advanced sweep configuration
+    """
+    
+    if focus_optimizers is None:
+        focus_optimizers = ['adam', 'adamw', 'sgd', 'rmsprop', 'lion', 'adagrad']
+    
+    base_params = {
+        'optimizer': {'values': focus_optimizers},
+        'learning_rate': {'min': 1e-5, 'max': 1e-1},
+        'batch_size': {'values': [32, 64, 128, 256, 512]},
+        'weight_decay': {'min': 1e-6, 'max': 1e-1}
+    }
+    
+    # Optimizer-specific parameters
+    if 'adam' in focus_optimizers or 'adamw' in focus_optimizers:
+        base_params.update({
+            'beta1': {'min': 0.8, 'max': 0.99},
+            'beta2': {'min': 0.9, 'max': 0.9999},
+            'epsilon': {'values': [1e-8, 1e-7, 1e-6]}
+        })
+    
+    if 'sgd' in focus_optimizers:
+        base_params.update({
+            'momentum': {'min': 0.0, 'max': 0.99},
+            'nesterov': {'values': [True, False]}
+        })
+    
+    if 'lion' in focus_optimizers:
+        base_params.update({
+            'lion_beta1': {'min': 0.9, 'max': 0.99},
+            'lion_beta2': {'min': 0.99, 'max': 0.999}
+        })
+    
+    # Learning rate scheduling
+    if include_scheduling:
+        base_params.update({
+            'lr_scheduler': {'values': ['cosine', 'step', 'exponential', 'plateau', 'cyclic', 'onecycle']},
+            'warmup_steps': {'values': [0, 100, 500, 1000, 2000]},
+            'cosine_restarts': {'values': [True, False]},
+            'step_size': {'values': [10, 50, 100, 200]},
+            'gamma': {'min': 0.1, 'max': 0.9}
+        })
+    
+    # Advanced regularization techniques
+    if include_regularization:
+        base_params.update({
+            'gradient_clip': {'values': [0.0, 0.5, 1.0, 5.0, 10.0]},
+            'use_ema': {'values': [True, False]},
+            'ema_decay': {'values': [0.99, 0.999, 0.9999]},
+            'label_smoothing': {'min': 0.0, 'max': 0.2},
+            'dropout': {'min': 0.0, 'max': 0.5},
+            'stochastic_weight_averaging': {'values': [True, False]},
+            'sam_rho': {'min': 0.0, 'max': 0.1}  # Sharpness-Aware Minimization
+        })
+    
+    # Phenomenon-specific metrics
+    if phenomenon_type == 'grokking':
+        metric = {'name': 'grokking_success_rate', 'goal': 'maximize'}
+    elif phenomenon_type == 'simplicity_bias':
+        metric = {'name': 'worst_group_acc', 'goal': 'maximize'}
+    elif phenomenon_type == 'phase_transitions':
+        metric = {'name': 'emerged_abilities_count', 'goal': 'maximize'}
+    else:
+        metric = {'name': 'best_test_acc', 'goal': 'maximize'}
+    
+    return {
+        'method': 'bayes',
+        'parameters': base_params,
+        'metric': metric,
+        'early_terminate': {
+            'type': 'hyperband',
+            'min_iter': 100,
+            'eta': 2
+        }
+    }
+
+
+def create_multi_seed_sweep(
+    base_config: Dict[str, Any],
+    num_seeds: int = 5,
+    seed_range: tuple = (0, 10000)
+) -> Dict[str, Any]:
+    """
+    Create a sweep configuration that includes multiple random seeds for statistical robustness.
+    
+    Args:
+        base_config: Base sweep configuration
+        num_seeds: Number of different seeds to test for each parameter combination
+        seed_range: Range for random seed generation
+        
+    Returns:
+        Enhanced sweep configuration with multiple seeds
+    """
+    
+    enhanced_config = base_config.copy()
+    
+    # Add seed parameter
+    seeds = [np.random.randint(seed_range[0], seed_range[1]) for _ in range(num_seeds)]
+    enhanced_config['parameters']['seed'] = {'values': seeds}
+    
+    # Add meta-analysis tracking
+    enhanced_config['parameters']['enable_meta_analysis'] = {'value': True}
+    
+    return enhanced_config
