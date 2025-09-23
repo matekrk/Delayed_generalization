@@ -1,8 +1,442 @@
 # Getting Started with Delayed Generalization Research
 
-This section provides quick start guides for running the implemented delayed generalization phenomena.
+Welcome to the Delayed Generalization research framework! This guide will help you quickly get started with studying delayed generalization phenomena using our comprehensive toolkit.
 
-## 🚀 Quick Start Examples
+## 🚀 Quick Setup
+
+### Prerequisites
+
+```bash
+# Install required dependencies
+pip install torch torchvision wandb numpy matplotlib seaborn pandas transformers scikit-learn
+```
+
+### Environment Setup
+
+```python
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
+import os
+
+# Set random seeds for reproducibility
+torch.manual_seed(42)
+np.random.seed(42)
+
+# Check GPU availability
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+```
+
+## 📚 Overview of Delayed Generalization Phenomena
+
+This framework supports studying several key delayed generalization phenomena:
+
+### 1. **Grokking** 🧠
+- **What**: Sudden generalization after extended memorization
+- **When**: Typically after 1000-10000 epochs in algorithmic tasks
+- **Example**: Learning modular arithmetic patterns
+
+### 2. **Simplicity Bias** 🎯
+- **What**: Models initially learn simple spurious features before true patterns
+- **When**: 50-500 epochs depending on bias strength
+- **Example**: Learning background colors before object shapes
+
+### 3. **Robustness vs Accuracy** 🛡️
+- **What**: Trade-offs between clean accuracy and corruption robustness
+- **When**: Throughout training, with possible phase transitions
+- **Example**: CIFAR-10-C corruption evaluation
+
+### 4. **Continual Learning** 🔄
+- **What**: Learning new tasks while retaining old knowledge
+- **When**: Across multiple sequential tasks
+- **Example**: CIFAR-100 divided into 10 tasks
+
+### 5. **Phase Transitions** ⚡
+- **What**: Sudden emergence of new capabilities during scaling
+- **When**: At critical model sizes or data amounts
+- **Example**: Language model emergent abilities
+
+## 🔬 Your First Experiment: Simplicity Bias on Colored MNIST
+
+Let's start with a classic delayed generalization experiment: studying simplicity bias on colored MNIST.
+
+### Step 1: Import Required Modules
+
+```python
+# Core framework imports
+from models.vision import create_model_for_phenomenon, ModelFactory
+from utils.wandb_integration.delayed_generalization_logger import DelayedGeneralizationLogger
+from phenomena.simplicity_bias.colored_mnist.train_colored_mnist import ColoredMNISTTrainer
+from phenomena.simplicity_bias.colored_mnist.data.generate_colored_mnist import create_colored_mnist_dataset
+
+# Standard imports
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+```
+
+### Step 2: Create Colored MNIST Dataset
+
+```python
+# Generate biased colored MNIST dataset
+print("Generating colored MNIST dataset...")
+
+train_dataset, test_dataset, metadata = create_colored_mnist_dataset(
+    data_dir='./data/colored_mnist',
+    num_train_samples=10000,
+    num_test_samples=2000,
+    color_correlation=0.9,  # Strong bias: 90% correlation between color and label
+    noise_level=0.1
+)
+
+print(f"Dataset created:")
+print(f"  Train samples: {len(train_dataset)}")
+print(f"  Test samples: {len(test_dataset)}")
+print(f"  Color correlation: {metadata['color_correlation']}")
+print(f"  Classes: {metadata['num_classes']}")
+```
+
+### Step 3: Create Model
+
+```python
+# Create model optimized for simplicity bias research
+model = create_model_for_phenomenon(
+    phenomenon='simplicity_bias',
+    model_type='mobilenet',  # Efficient for quick experiments
+    efficiency='light',
+    num_classes=10
+)
+
+print(f"Model created:")
+print(f"  Architecture: MobileNet")
+print(f"  Parameters: {sum(p.numel() for p in model.parameters()):,}")
+print(f"  Model size: {sum(p.numel() for p in model.parameters()) * 4 / 1024**2:.2f} MB")
+```
+
+### Step 4: Setup WandB Logging (Optional)
+
+```python
+# Initialize sophisticated experiment tracking
+wandb_logger = DelayedGeneralizationLogger(
+    project_name="delayed-generalization-tutorial",
+    experiment_name="colored_mnist_simplicity_bias",
+    config={
+        'dataset': 'colored_mnist',
+        'phenomenon': 'simplicity_bias',
+        'model': 'mobilenet_light',
+        'color_correlation': 0.9,
+        'num_classes': 10,
+        'batch_size': 128,
+        'learning_rate': 1e-3,
+        'weight_decay': 1e-4
+    },
+    phenomenon_type='simplicity_bias',
+    tags=['tutorial', 'colored_mnist', 'simplicity_bias'],
+    notes="First experiment following the getting started guide"
+)
+
+print("WandB logging initialized!")
+print(f"Experiment: {wandb_logger.run.name}")
+```
+
+### Step 5: Create Data Loaders
+
+```python
+# Create data loaders for training
+train_loader = DataLoader(
+    train_dataset, 
+    batch_size=128, 
+    shuffle=True, 
+    num_workers=4
+)
+
+test_loader = DataLoader(
+    test_dataset, 
+    batch_size=128, 
+    shuffle=False, 
+    num_workers=4
+)
+
+print(f"Data loaders created:")
+print(f"  Train batches: {len(train_loader)}")
+print(f"  Test batches: {len(test_loader)}")
+```
+
+### Step 6: Setup Training
+
+```python
+# Create trainer with bias analysis capabilities
+trainer = ColoredMNISTTrainer(
+    model=model,
+    train_loader=train_loader,
+    test_loader=test_loader,
+    device=device,
+    learning_rate=1e-3,
+    weight_decay=1e-4,
+    wandb_logger=wandb_logger
+)
+
+print("Trainer initialized with bias analysis capabilities!")
+```
+
+### Step 7: Train and Monitor Delayed Generalization
+
+```python
+# Train model and study delayed generalization patterns
+print("Starting training...")
+print("=" * 50)
+
+results = trainer.train(
+    epochs=200,  # Enough epochs to observe delayed generalization
+    log_interval=10,
+    save_dir='./results/tutorial_colored_mnist'
+)
+
+print("=" * 50)
+print("Training completed!")
+
+# Print key results
+print(f"\nFinal Results:")
+print(f"  Test Accuracy: {results['final_test_acc']:.2f}%")
+print(f"  Shape Accuracy: {results['final_shape_acc']:.2f}%")
+print(f"  Color Accuracy: {results['final_color_acc']:.2f}%")
+print(f"  Bias Score: {results['final_bias_score']:.3f}")
+
+# Check for delayed generalization
+if results.get('bias_reduction_detected'):
+    print(f"  🎉 Delayed generalization detected!")
+    print(f"     Bias reduction: {results['bias_reduction']:.3f}")
+else:
+    print(f"  ⏳ No clear delayed generalization pattern detected")
+```
+
+### Step 8: Analyze Results
+
+```python
+# Analyze training dynamics
+print("\nAnalyzing training dynamics...")
+
+# Create visualization
+fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+epochs = range(1, len(results['training_history']['test_accuracies']) + 1)
+
+# Overall accuracy
+axes[0, 0].plot(epochs, results['training_history']['test_accuracies'], label='Test Accuracy')
+axes[0, 0].plot(epochs, results['training_history']['train_accuracies'], label='Train Accuracy')
+axes[0, 0].set_title('Overall Accuracy')
+axes[0, 0].set_xlabel('Epoch')
+axes[0, 0].set_ylabel('Accuracy (%)')
+axes[0, 0].legend()
+axes[0, 0].grid(True, alpha=0.3)
+
+# Bias metrics
+if 'shape_accuracies' in results['training_history']:
+    axes[0, 1].plot(epochs, results['training_history']['shape_accuracies'], label='Shape Accuracy')
+    axes[0, 1].plot(epochs, results['training_history']['color_accuracies'], label='Color Accuracy')
+    axes[0, 1].set_title('Feature-Specific Accuracy')
+    axes[0, 1].set_xlabel('Epoch')
+    axes[0, 1].set_ylabel('Accuracy (%)')
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
+
+# Bias score evolution
+if 'bias_scores' in results['training_history']:
+    axes[1, 0].plot(epochs, results['training_history']['bias_scores'], color='red')
+    axes[1, 0].set_title('Bias Score Evolution')
+    axes[1, 0].set_xlabel('Epoch')
+    axes[1, 0].set_ylabel('Bias Score')
+    axes[1, 0].grid(True, alpha=0.3)
+
+# Loss curves
+axes[1, 1].plot(epochs, results['training_history']['test_losses'], label='Test Loss')
+axes[1, 1].plot(epochs, results['training_history']['train_losses'], label='Train Loss')
+axes[1, 1].set_title('Loss Curves')
+axes[1, 1].set_xlabel('Epoch')
+axes[1, 1].set_ylabel('Loss')
+axes[1, 1].legend()
+axes[1, 1].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.savefig('./results/tutorial_colored_mnist/analysis.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+print("Analysis complete! Check './results/tutorial_colored_mnist/' for detailed results.")
+```
+
+## 🎯 Next Steps: Exploring Other Phenomena
+
+### Grokking on Modular Arithmetic
+
+```python
+# Quick setup for grokking experiments
+from phenomena.grokking.training.train_modular import GrokkingTrainer
+from phenomena.grokking.models.simple_transformer import create_grokking_model
+
+# Create transformer for algorithmic task
+grokking_model = create_grokking_model(
+    vocab_size=97,  # Modular arithmetic mod 97
+    d_model=128,
+    n_heads=4,
+    n_layers=2,
+    num_classes=97
+)
+
+print("Grokking model ready for modular arithmetic!")
+print(f"Parameters: {sum(p.numel() for p in grokking_model.parameters()):,}")
+```
+
+### Robustness on CIFAR-100-C
+
+```python
+# Quick setup for robustness experiments
+from phenomena.robustness.cifar100c.train_cifar100c import CIFAR100CTrainer, CIFAR100CModel
+
+# Create robust model for corruption evaluation
+robust_model = CIFAR100CModel(num_classes=100, model_size='medium')
+
+print("Robustness model ready for CIFAR-100-C!")
+print(f"Parameters: {sum(p.numel() for p in robust_model.parameters()):,}")
+```
+
+### Continual Learning on CIFAR-100
+
+```python
+# Quick setup for continual learning
+from phenomena.continual_learning.cifar100_10tasks.train_continual_cifar100 import ContinualLearningTrainer
+
+# Create continual learning model
+cl_model = create_model_for_phenomenon(
+    phenomenon='continual_learning',
+    efficiency='medium',
+    num_classes=100
+)
+
+print("Continual learning model ready!")
+print("Will learn 10 tasks sequentially with 10 classes each")
+```
+
+## 🛠️ Advanced Features
+
+### 1. Enhanced WandB Analysis
+
+```python
+# Advanced metrics tracking
+wandb_logger.analyze_mutual_information(
+    epoch=100,
+    model=model,
+    data_loader=test_loader
+)
+
+# Cross-seed meta-analysis
+seed_results = {
+    42: {'final_test_acc': 85.2, 'bias_score': 0.15},
+    123: {'final_test_acc': 84.8, 'bias_score': 0.18},
+    456: {'final_test_acc': 85.0, 'bias_score': 0.16}
+}
+
+meta_analysis = DelayedGeneralizationLogger.perform_meta_analysis(
+    project_name="delayed-generalization-tutorial",
+    phenomenon_type="simplicity_bias",
+    seed_results=seed_results
+)
+```
+
+### 2. Model Architecture Comparison
+
+```python
+# Compare different architectures
+architectures = ['mobilenet', 'vit']
+efficiencies = ['light', 'medium']
+
+results_comparison = {}
+for arch in architectures:
+    for eff in efficiencies:
+        model = create_model_for_phenomenon(
+            phenomenon='simplicity_bias',
+            model_type=arch,
+            efficiency=eff,
+            num_classes=10
+        )
+        
+        analysis = ModelFactory.analyze_model(model)
+        results_comparison[f"{arch}_{eff}"] = analysis
+
+print("Architecture comparison:")
+for name, analysis in results_comparison.items():
+    print(f"  {name}: {analysis['total_parameters']:,} params, {analysis['efficiency_class']}")
+```
+
+### 3. Hyperparameter Sweeps
+
+```python
+# Create automated hyperparameter sweeps
+from utils.wandb_integration.delayed_generalization_logger import create_advanced_optimizer_sweep
+
+sweep_config = create_advanced_optimizer_sweep(
+    phenomenon_type='simplicity_bias',
+    focus_optimizers=['adam', 'adamw', 'sgd'],
+    include_scheduling=True,
+    include_regularization=True
+)
+
+print("Sweep configuration created!")
+print(f"Parameters to optimize: {list(sweep_config['parameters'].keys())}")
+```
+
+## 📖 Additional Resources
+
+### Experiment Templates
+- `examples/grokking_basic.py` - Basic grokking experiment
+- `examples/simplicity_bias_advanced.py` - Advanced bias analysis
+- `examples/continual_learning_demo.py` - Continual learning demo
+- `examples/robustness_evaluation.py` - Robustness evaluation
+
+### Documentation
+- `IMPLEMENTATION_STATUS.md` - Current implementation status
+- `ENHANCED_FEATURES.md` - Advanced feature documentation
+- `CONTRIBUTING.md` - How to contribute new phenomena
+
+### Research Papers
+- Original grokking paper: "Grokking: Generalization Beyond Overfitting"
+- Simplicity bias: "Learning Rule vs Implementation"
+- Phase transitions: "Phase Transitions in Deep Learning"
+
+## 🎉 Congratulations!
+
+You've successfully run your first delayed generalization experiment! Here's what you accomplished:
+
+✅ **Generated a biased dataset** with controlled spurious correlations
+✅ **Created an efficient model** optimized for your research
+✅ **Set up sophisticated logging** with WandB integration  
+✅ **Trained and analyzed** delayed generalization patterns
+✅ **Visualized training dynamics** and bias evolution
+
+### What's Next?
+
+1. **Experiment with different phenomena** - Try grokking, robustness, or continual learning
+2. **Compare architectures** - Test Vision Transformers vs MobileNets
+3. **Run parameter sweeps** - Find optimal hyperparameters automatically
+4. **Analyze across seeds** - Study statistical significance with meta-analysis
+5. **Contribute new phenomena** - Add your own delayed generalization tasks
+
+## 💡 Tips for Success
+
+- **Start small**: Use light models and small datasets for quick iteration
+- **Monitor closely**: Watch for phase transitions and sudden improvements
+- **Compare baselines**: Always compare against simple baselines
+- **Statistical rigor**: Run multiple seeds and compute confidence intervals
+- **Share findings**: Use WandB to share and collaborate on results
+
+Happy researching! 🚀🔬
+
+---
+
+## 🚀 Legacy Quick Start Examples
+
+For reference, here are the original command-line examples:
 
 ### Grokking (Modular Arithmetic)
 
@@ -35,19 +469,6 @@ python phenomena/simplicity_bias/waterbirds/training/train_waterbirds.py \
 python phenomena/simplicity_bias/waterbirds/training/train_waterbirds.py \
     --data_dir ./waterbirds_data --method group_dro --epochs 100
 ```
-
-### Colored MNIST (Simplicity Bias)
-
-Study color vs shape learning:
-
-```bash
-# Generate colored MNIST dataset
-python data/vision/colored_mnist/generate_colored_mnist.py \
-    --train_correlation 0.9 --test_correlation 0.1 --output_dir ./colored_mnist_data
-
-# Train CNN model
-python phenomena/simplicity_bias/colored_mnist/training/train_colored_mnist.py \
-    --data_dir ./colored_mnist_data --epochs 100
 ```
 
 ### CelebA (Attribute Bias)

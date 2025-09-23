@@ -65,22 +65,84 @@ This document lists complex issues and features that require future attention be
 ## Research-Specific TODOs
 
 ### Grokking Research
-- [ ] **Mechanistic interpretability**: Integration with tools like TransformerLens
-- [ ] **Circuit analysis**: Automated circuit discovery in grokking models
-- [ ] **Scaling laws**: Systematic study of grokking across model sizes
-- [ ] **New tasks**: More diverse algorithmic tasks beyond modular arithmetic
+- [ ] **Mechanistic interpretability**: Integration with tools like TransformerLens for analyzing internal representations
+- [ ] **Circuit analysis**: Automated circuit discovery in grokking models to understand sudden generalization mechanisms
+- [ ] **Scaling laws**: Systematic study of grokking across model sizes to identify critical scales
+- [ ] **New tasks**: More diverse algorithmic tasks beyond modular arithmetic (sorting, graph algorithms, etc.)
+- [ ] **Attention analysis**: Deep study of attention pattern evolution during grokking transitions
+- [ ] **Weight dynamics**: Analysis of weight matrix evolution and rank changes during grokking
 
 ### Simplicity Bias Research
-- [ ] **Feature importance analysis**: Automated spurious feature detection
-- [ ] **Intervention experiments**: Tools for intervening on spurious features
-- [ ] **Human bias comparison**: Compare model biases with human biases
-- [ ] **Bias mitigation evaluation**: Systematic evaluation of debiasing methods
+- [ ] **Feature importance analysis**: Automated spurious feature detection using gradient-based methods
+- [ ] **Intervention experiments**: Tools for intervening on spurious features during training
+- [ ] **Human bias comparison**: Compare model biases with human cognitive biases and learning patterns
+- [ ] **Bias mitigation evaluation**: Systematic evaluation of debiasing methods (Group DRO, IRM, etc.)
+- [ ] **Cross-domain bias transfer**: Study how biases learned in one domain affect others
+- [ ] **Temporal bias dynamics**: Fine-grained analysis of bias strength evolution
 
 ### Phase Transition Research
-- [ ] **Critical point prediction**: ML models to predict when transitions will occur
-- [ ] **Universality analysis**: Study universal properties across different transitions
-- [ ] **Control mechanisms**: Methods to control when and how transitions occur
-- [ ] **Theoretical framework**: Connection to physics-inspired theories
+- [ ] **Critical point prediction**: ML models to predict when transitions will occur based on early training signals
+- [ ] **Universality analysis**: Study universal properties across different types of transitions
+- [ ] **Control mechanisms**: Methods to control when and how transitions occur through training interventions
+- [ ] **Theoretical framework**: Connection to physics-inspired theories of phase transitions
+- [ ] **Multi-modal transitions**: Study transitions across vision-language and other multi-modal settings
+- [ ] **Emergence metrics**: Better quantification of emergent capabilities
+
+### Continual Learning Research
+- [ ] **Memory dynamics**: Analysis of how knowledge is stored and retrieved across tasks
+- [ ] **Transfer analysis**: Detailed study of positive/negative transfer patterns
+- [ ] **Catastrophic forgetting mechanisms**: Understanding the neural basis of forgetting
+- [ ] **Meta-learning integration**: Combining continual learning with meta-learning approaches
+- [ ] **Task interference patterns**: Systematic study of which tasks interfere with others
+- [ ] **Lifelong learning**: Extension to truly lifelong learning scenarios
+
+### Robustness Research
+- [ ] **Distribution shift analysis**: Systematic study of different types of distribution shifts
+- [ ] **Adversarial vs natural robustness**: Understanding the relationship between different robustness types
+- [ ] **Robustness-accuracy trade-offs**: Theoretical and empirical analysis of fundamental trade-offs
+- [ ] **Certification integration**: Integration with certified defense methods
+- [ ] **Corruption severity scaling**: Study of how robustness scales with corruption severity
+- [ ] **Cross-corruption generalization**: How robustness to one corruption type affects others
+
+### Cross-Phenomenon Research
+- [ ] **Phenomenon interactions**: Study how different phenomena interact (e.g., grokking + bias)
+- [ ] **Universal patterns**: Identify common patterns across all delayed generalization phenomena
+- [ ] **Prediction frameworks**: General frameworks for predicting delayed generalization
+- [ ] **Intervention strategies**: General strategies for controlling delayed generalization
+- [ ] **Measurement standards**: Standardized metrics for comparing phenomena across studies
+- [ ] **Theoretical unification**: Unified theoretical framework explaining all phenomena
+
+### Mechanistic Interpretability Tools
+- [ ] **Activation patching**: Tools for systematic activation patching experiments
+- [ ] **Causal interventions**: Framework for causal interventions on model components
+- [ ] **Feature visualization**: Advanced techniques for visualizing learned features
+- [ ] **Concept bottleneck models**: Integration with concept-based interpretability
+- [ ] **Probing techniques**: Systematic probing of representations at different training stages
+- [ ] **Circuit discovery**: Automated discovery of functional circuits in networks
+
+### Data and Evaluation Infrastructure
+- [ ] **Benchmark suites**: Comprehensive benchmarks for each phenomenon type
+- [ ] **Standardized evaluation**: Common evaluation protocols across phenomena
+- [ ] **Real-world datasets**: Integration with real-world datasets showing delayed generalization
+- [ ] **Synthetic data generation**: Advanced synthetic data generation for controlled studies
+- [ ] **Cross-dataset evaluation**: Evaluation frameworks that work across multiple datasets
+- [ ] **Longitudinal studies**: Infrastructure for long-term studies across multiple years
+
+### Theoretical Analysis
+- [ ] **Mathematical models**: Formal mathematical models of delayed generalization
+- [ ] **Information theory**: Information-theoretic analysis of delayed generalization
+- [ ] **Optimization theory**: Connection to optimization theory and loss landscape analysis
+- [ ] **Statistical learning theory**: Theoretical guarantees for delayed generalization
+- [ ] **Physics connections**: Connections to statistical physics and complex systems
+- [ ] **Complexity theory**: Computational complexity analysis of delayed generalization
+
+### Advanced Experimental Design
+- [ ] **Multi-seed protocols**: Standardized protocols for multi-seed experimental design
+- [ ] **Statistical methods**: Advanced statistical methods for analyzing delayed generalization
+- [ ] **Experimental controls**: Comprehensive frameworks for experimental controls
+- [ ] **Reproducibility standards**: Standards for reproducible delayed generalization research
+- [ ] **Meta-analysis tools**: Tools for meta-analysis across studies and papers
+- [ ] **Effect size quantification**: Standardized methods for quantifying effect sizes
 
 ## Implementation Notes
 

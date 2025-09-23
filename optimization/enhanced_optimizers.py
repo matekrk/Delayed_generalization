@@ -7,6 +7,8 @@ This module provides enhanced versions of standard optimizers with additional fe
 - Adaptive learning rate schedules
 - Weight decay scheduling
 - Detailed logging capabilities
+- Exponential Moving Average (EMA) support
+- Moving Average (MA) support
 """
 
 import torch
@@ -15,6 +17,123 @@ from torch.optim import Optimizer
 import numpy as np
 from typing import Dict, List, Optional, Any, Callable, Union
 import math
+
+
+class ExponentialMovingAverage:
+    """
+    Exponential Moving Average (EMA) for model parameters.
+    
+    This can be used to maintain an exponentially decaying average of model parameters
+    which often leads to better generalization and more stable training.
+    """
+    
+    def __init__(self, model: nn.Module, decay: float = 0.999, device: Optional[torch.device] = None):
+        """
+        Initialize EMA.
+        
+        Args:
+            model: The model whose parameters to track
+            decay: Decay factor for the exponential moving average
+            device: Device to store the shadow parameters
+        """
+        self.decay = decay
+        self.device = device if device else next(model.parameters()).device
+        
+        # Create shadow parameters
+        self.shadow_params = {}
+        self.backup_params = {}
+        
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                self.shadow_params[name] = param.data.clone().to(self.device)
+    
+    def update(self, model: nn.Module):
+        """Update EMA parameters."""
+        with torch.no_grad():
+            for name, param in model.named_parameters():
+                if param.requires_grad and name in self.shadow_params:
+                    self.shadow_params[name] = (
+                        self.decay * self.shadow_params[name] + 
+                        (1.0 - self.decay) * param.data.to(self.device)
+                    )
+    
+    def apply_shadow(self, model: nn.Module):
+        """Apply shadow parameters to model (backup original parameters first)."""
+        with torch.no_grad():
+            for name, param in model.named_parameters():
+                if param.requires_grad and name in self.shadow_params:
+                    self.backup_params[name] = param.data.clone()
+                    param.data.copy_(self.shadow_params[name])
+    
+    def restore(self, model: nn.Module):
+        """Restore original parameters from backup."""
+        with torch.no_grad():
+            for name, param in model.named_parameters():
+                if param.requires_grad and name in self.backup_params:
+                    param.data.copy_(self.backup_params[name])
+    
+    def get_decay_schedule(self, step: int, warmup_steps: int = 1000):
+        """Get adaptive decay schedule that starts slow and increases."""
+        if step < warmup_steps:
+            return min(self.decay, step / warmup_steps)
+        return self.decay
+
+
+class MovingAverage:
+    """
+    Simple Moving Average (MA) for model parameters.
+    
+    Maintains a moving average over the last N parameter updates.
+    """
+    
+    def __init__(self, model: nn.Module, window_size: int = 100):
+        """
+        Initialize Moving Average.
+        
+        Args:
+            model: The model whose parameters to track
+            window_size: Number of recent updates to average over
+        """
+        self.window_size = window_size
+        self.param_history = {}
+        self.step_count = 0
+        
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                self.param_history[name] = []
+    
+    def update(self, model: nn.Module):
+        """Update moving average."""
+        self.step_count += 1
+        
+        with torch.no_grad():
+            for name, param in model.named_parameters():
+                if param.requires_grad and name in self.param_history:
+                    # Add current parameters
+                    self.param_history[name].append(param.data.clone())
+                    
+                    # Keep only last window_size updates
+                    if len(self.param_history[name]) > self.window_size:
+                        self.param_history[name] = self.param_history[name][-self.window_size:]
+    
+    def get_averaged_params(self) -> Dict[str, torch.Tensor]:
+        """Get current moving average of parameters."""
+        averaged_params = {}
+        
+        for name, param_list in self.param_history.items():
+            if param_list:
+                averaged_params[name] = torch.stack(param_list).mean(dim=0)
+        
+        return averaged_params
+    
+    def apply_averaged_params(self, model: nn.Module):
+        """Apply averaged parameters to model."""
+        averaged_params = self.get_averaged_params()
+        
+        with torch.no_grad():
+            for name, param in model.named_parameters():
+                if param.requires_grad and name in averaged_params:
+                    param.data.copy_(averaged_params[name])
 
 
 class EnhancedAdamW(torch.optim.AdamW):
@@ -26,6 +145,7 @@ class EnhancedAdamW(torch.optim.AdamW):
     - Adaptive weight decay
     - Learning rate warm-up
     - Gradient statistics logging
+    - EMA and MA support
     """
     
     def __init__(
@@ -40,7 +160,12 @@ class EnhancedAdamW(torch.optim.AdamW):
         grad_clip_norm: Optional[float] = None,
         adaptive_weight_decay: bool = False,
         warmup_steps: int = 0,
-        log_grad_stats: bool = True
+        log_grad_stats: bool = True,
+        # EMA/MA support
+        use_ema: bool = False,
+        ema_decay: float = 0.999,
+        use_ma: bool = False,
+        ma_window_size: int = 100
     ):
         super().__init__(
             params=params,
@@ -57,14 +182,32 @@ class EnhancedAdamW(torch.optim.AdamW):
         self.warmup_steps = warmup_steps
         self.log_grad_stats = log_grad_stats
         
+        # EMA/MA support
+        self.use_ema = use_ema
+        self.ema_decay = ema_decay
+        self.use_ma = use_ma
+        self.ma_window_size = ma_window_size
+        
+        # Initialize EMA/MA (will be set when model is provided)
+        self.ema = None
+        self.ma = None
+        
         # Tracking variables
         self.step_count = 0
         self.grad_norms = []
         self.effective_lrs = []
         self.weight_decay_history = []
+    
+    def setup_averaging(self, model: nn.Module):
+        """Setup EMA/MA for the given model."""
+        if self.use_ema:
+            self.ema = ExponentialMovingAverage(model, decay=self.ema_decay)
         
-    def step(self, closure: Optional[Callable] = None):
-        """Enhanced step function with gradient tracking."""
+        if self.use_ma:
+            self.ma = MovingAverage(model, window_size=self.ma_window_size)
+    
+    def step(self, closure: Optional[Callable] = None, model: Optional[nn.Module] = None):
+        """Enhanced step function with gradient tracking and averaging support."""
         
         # Track gradient statistics before clipping
         if self.log_grad_stats:
@@ -78,6 +221,58 @@ class EnhancedAdamW(torch.optim.AdamW):
         # Adaptive weight decay
         if self.adaptive_weight_decay:
             self._update_weight_decay()
+        
+        # Learning rate warmup
+        if self.step_count < self.warmup_steps:
+            self._apply_warmup()
+        
+        # Standard optimization step
+        loss = super().step(closure)
+        
+        # Update EMA/MA if model is provided
+        if model is not None:
+            if self.ema is not None:
+                self.ema.update(model)
+            
+            if self.ma is not None:
+                self.ma.update(model)
+        
+        self.step_count += 1
+        return loss
+    
+    def apply_ema(self, model: nn.Module):
+        """Apply EMA parameters to model."""
+        if self.ema is not None:
+            self.ema.apply_shadow(model)
+    
+    def restore_original(self, model: nn.Module):
+        """Restore original parameters (if EMA was applied)."""
+        if self.ema is not None:
+            self.ema.restore(model)
+    
+    def apply_ma(self, model: nn.Module):
+        """Apply moving average parameters to model."""
+        if self.ma is not None:
+            self.ma.apply_averaged_params(model)
+    
+    def get_averaging_metrics(self) -> Dict[str, Any]:
+        """Get metrics related to parameter averaging."""
+        metrics = {}
+        
+        if self.ema is not None:
+            metrics['ema_decay'] = self.ema.decay
+            metrics['ema_enabled'] = True
+        else:
+            metrics['ema_enabled'] = False
+        
+        if self.ma is not None:
+            metrics['ma_window_size'] = self.ma.window_size
+            metrics['ma_step_count'] = self.ma.step_count
+            metrics['ma_enabled'] = True
+        else:
+            metrics['ma_enabled'] = False
+        
+        return metrics
         
         # Warm-up learning rate
         if self.step_count < self.warmup_steps:
