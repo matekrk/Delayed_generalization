@@ -29,6 +29,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from models.simple_transformer import create_grokking_model
 from utils.wandb_integration.delayed_generalization_logger import setup_wandb_for_phenomenon, create_wandb_config_from_args
+from visualization.training_curves import TrainingCurvePlotter
 # Robust import for the dataset loader: try the expected package path first,
 # then ensure the repository root is on sys.path and try again, then fall back
 # to an alternative nested package name used in some layouts.
@@ -263,49 +264,32 @@ class GrokkingTrainer:
         return results
     
     def plot_training_curves(self, save_dir: str):
-        """Plot and save training curves"""
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 8))
+        """Plot and save training curves using centralized visualization"""
+        plotter = TrainingCurvePlotter(save_dir)
         
-        epochs = self.epochs_logged
+        # Use centralized grokking-specific plotting
+        plotter.plot_grokking_curves(
+            epochs=self.epochs_logged,
+            train_losses=self.train_losses,
+            test_losses=self.test_losses,
+            train_accuracies=self.train_accuracies,
+            test_accuracies=self.test_accuracies,
+            save_name='training_curves.png'
+        )
         
-        # Loss curves
-        ax1.plot(epochs, self.train_losses, label='Train', color='blue')
-        ax1.plot(epochs, self.test_losses, label='Test', color='red')
-        ax1.set_xlabel('Epoch')
-        ax1.set_ylabel('Loss')
-        ax1.set_title('Training and Test Loss')
-        ax1.legend()
-        ax1.grid(True)
-        
-        # Accuracy curves
-        ax2.plot(epochs, self.train_accuracies, label='Train', color='blue')
-        ax2.plot(epochs, self.test_accuracies, label='Test', color='red')
-        ax2.set_xlabel('Epoch')
-        ax2.set_ylabel('Accuracy')
-        ax2.set_title('Training and Test Accuracy')
-        ax2.legend()
-        ax2.grid(True)
-        
-        # Log scale loss
-        ax3.semilogy(epochs, self.train_losses, label='Train', color='blue')
-        ax3.semilogy(epochs, self.test_losses, label='Test', color='red')
-        ax3.set_xlabel('Epoch')
-        ax3.set_ylabel('Loss (log scale)')
-        ax3.set_title('Loss (Log Scale)')
-        ax3.legend()
-        ax3.grid(True)
-        
-        # Test accuracy zoom
-        ax4.plot(epochs, self.test_accuracies, color='red', linewidth=2)
-        ax4.set_xlabel('Epoch')
-        ax4.set_ylabel('Test Accuracy')
-        ax4.set_title('Test Accuracy (Grokking Detection)')
-        ax4.grid(True)
-        ax4.set_ylim(0, 1)
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, 'training_curves.png'), dpi=150, bbox_inches='tight')
-        plt.close()
+        # Save metrics to JSON
+        metrics = {
+            'epochs': self.epochs_logged,
+            'train_losses': self.train_losses,
+            'test_losses': self.test_losses,
+            'train_accuracies': self.train_accuracies,
+            'test_accuracies': self.test_accuracies,
+            'final_train_loss': self.train_losses[-1] if self.train_losses else 0,
+            'final_test_loss': self.test_losses[-1] if self.test_losses else 0,
+            'final_train_acc': self.train_accuracies[-1] if self.train_accuracies else 0,
+            'final_test_acc': self.test_accuracies[-1] if self.test_accuracies else 0
+        }
+        plotter.save_metrics_json(metrics, 'grokking_metrics.json')
 
 
 def create_data_loaders(data_dir: str, batch_size: int = 512, data_fraction: float = 1.0) -> Tuple[DataLoader, DataLoader, Dict]:

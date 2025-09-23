@@ -29,6 +29,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from models.cnn_models import create_colored_mnist_model
 from data.vision.colored_mnist.generate_colored_mnist import load_colored_mnist_dataset, ColoredMNISTDataset
+from visualization.bias_analysis import BiasAnalysisPlotter
 try:
     from data.vision.colored_mnist.generate_synthetic_colored_digits import load_synthetic_dataset, SyntheticColoredDataset
 except ImportError:
@@ -303,50 +304,31 @@ class SimplicityBiasTrainer:
         return results
     
     def plot_training_curves(self, save_dir: str):
-        """Plot and save training curves with bias analysis"""
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+        """Plot and save training curves with bias analysis using centralized visualization"""
+        plotter = BiasAnalysisPlotter(save_dir)
         
-        epochs = self.epochs_logged
+        # Use centralized color vs shape bias plotting
+        plotter.plot_color_shape_bias(
+            epochs=self.epochs_logged,
+            train_losses=self.train_losses,
+            test_losses=self.test_losses,
+            train_accuracies=self.train_accuracies,
+            test_accuracies=self.test_accuracies,
+            color_accuracies=self.color_accuracies,
+            shape_accuracies=self.shape_accuracies,
+            save_name='bias_analysis.png'
+        )
         
-        # Loss curves
-        ax1.plot(epochs, self.train_losses, label='Train', color='blue')
-        ax1.plot(epochs, self.test_losses, label='Test', color='red')
-        ax1.set_xlabel('Epoch')
-        ax1.set_ylabel('Loss')
-        ax1.set_title('Training and Test Loss')
-        ax1.legend()
-        ax1.grid(True)
-        
-        # Overall accuracy curves
-        ax2.plot(epochs, self.train_accuracies, label='Train', color='blue')
-        ax2.plot(epochs, self.test_accuracies, label='Test', color='red')
-        ax2.set_xlabel('Epoch')
-        ax2.set_ylabel('Accuracy')
-        ax2.set_title('Overall Accuracy')
-        ax2.legend()
-        ax2.grid(True)
-        
-        # Bias analysis: Color vs Shape
-        ax3.plot(epochs, self.color_accuracies, label='Color Bias', color='orange', linewidth=2)
-        ax3.plot(epochs, self.shape_accuracies, label='Shape Bias', color='green', linewidth=2)
-        ax3.set_xlabel('Epoch')
-        ax3.set_ylabel('Accuracy')
-        ax3.set_title('Color vs Shape Bias Analysis')
-        ax3.legend()
-        ax3.grid(True)
-        
-        # Combined view
-        ax4.plot(epochs, self.test_accuracies, label='Overall Test', color='red')
-        ax4.plot(epochs, self.color_accuracies, label='Color Bias', color='orange')
-        ax4.plot(epochs, self.shape_accuracies, label='Shape Bias', color='green')
-        ax4.set_xlabel('Epoch')
-        ax4.set_ylabel('Accuracy')
-        ax4.set_title('Simplicity Bias Analysis')
-        ax4.legend()
-        ax4.grid(True)
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, 'bias_analysis.png'), dpi=150, bbox_inches='tight')
+        # Also create summary statistics
+        bias_metrics = {
+            'final_test_acc': self.test_accuracies[-1] if self.test_accuracies else 0,
+            'final_color_acc': self.color_accuracies[-1] if self.color_accuracies else 0,
+            'final_shape_acc': self.shape_accuracies[-1] if self.shape_accuracies else 0,
+            'color_bias_gap': (self.color_accuracies[-1] - self.shape_accuracies[-1]) if (self.color_accuracies and self.shape_accuracies) else 0,
+            'final_train_loss': self.train_losses[-1] if self.train_losses else 0,
+            'final_test_loss': self.test_losses[-1] if self.test_losses else 0
+        }
+        plotter.plot_bias_summary_statistics(bias_metrics, 'bias_summary.png')
         plt.close()
 
 

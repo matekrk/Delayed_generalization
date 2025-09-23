@@ -29,6 +29,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 # from data.vision.cifar10c.generate_synthetic_cifar10c import load_synthetic_cifar10c_dataset
 from data.vision.cifar10c.generate_cifar10c import load_cifar10c_dataset
 from data.vision.cifar10c.generate_cifar10c import CIFAR10CDataset
+from visualization.training_curves import TrainingCurvePlotter
 
 class CIFAR10CModel(nn.Module):
     """CNN model for synthetic CIFAR-10-C classification"""
@@ -249,48 +250,40 @@ class CIFAR10CTrainer:
         return results
     
     def _plot_results(self, save_dir: str):
-        """Plot training results"""
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        """Plot training results using centralized visualization"""
+        plotter = TrainingCurvePlotter(save_dir)
         
-        # Loss curves
-        axes[0, 0].plot(self.train_losses, label='Train')
-        axes[0, 0].plot(self.test_losses, label='Test')
-        axes[0, 0].set_title('Loss Curves')
-        axes[0, 0].set_xlabel('Epoch')
-        axes[0, 0].set_ylabel('Loss')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True)
+        epochs = list(range(len(self.train_losses)))
         
-        # Accuracy curves
-        axes[0, 1].plot(self.train_accuracies, label='Train')
-        axes[0, 1].plot(self.test_accuracies, label='Test')
-        axes[0, 1].set_title('Accuracy Curves')
-        axes[0, 1].set_xlabel('Epoch')
-        axes[0, 1].set_ylabel('Accuracy (%)')
-        axes[0, 1].legend()
-        axes[0, 1].grid(True)
+        # Create corruption accuracies dict for robustness plotting
+        corruption_accuracies = {
+            'corrupted': self.corrupted_accuracies
+        }
         
-        # Clean vs Corrupted accuracy
-        axes[1, 0].plot(self.clean_accuracies, label='Clean', color='blue')
-        axes[1, 0].plot(self.corrupted_accuracies, label='Corrupted', color='red')
-        axes[1, 0].set_title('Clean vs Corrupted Accuracy')
-        axes[1, 0].set_xlabel('Epoch')
-        axes[1, 0].set_ylabel('Accuracy (%)')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True)
+        # Use centralized robustness plotting
+        plotter.plot_robustness_curves(
+            epochs=epochs,
+            train_losses=self.train_losses,
+            test_losses=self.test_losses,
+            train_accuracies=self.train_accuracies,
+            test_accuracies=self.clean_accuracies,  # Use clean accuracies as test
+            corruption_accuracies=corruption_accuracies,
+            save_name='robustness_curves.png'
+        )
         
-        # Robustness gap
-        robustness_gap = np.array(self.clean_accuracies) - np.array(self.corrupted_accuracies)
-        axes[1, 1].plot(robustness_gap, label='Robustness Gap', color='orange')
-        axes[1, 1].set_title('Robustness Gap (Clean - Corrupted)')
-        axes[1, 1].set_xlabel('Epoch')
-        axes[1, 1].set_ylabel('Accuracy Gap (%)')
-        axes[1, 1].legend()
-        axes[1, 1].grid(True)
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, 'training_results.png'), dpi=150, bbox_inches='tight')
-        plt.close()
+        # Save robustness metrics to JSON
+        metrics = {
+            'epochs': epochs,
+            'train_losses': self.train_losses,
+            'test_losses': self.test_losses,
+            'train_accuracies': self.train_accuracies,
+            'clean_accuracies': self.clean_accuracies,
+            'corrupted_accuracies': self.corrupted_accuracies,
+            'final_robustness_gap': (self.clean_accuracies[-1] - self.corrupted_accuracies[-1]) if (self.clean_accuracies and self.corrupted_accuracies) else 0,
+            'final_clean_acc': self.clean_accuracies[-1] if self.clean_accuracies else 0,
+            'final_corrupted_acc': self.corrupted_accuracies[-1] if self.corrupted_accuracies else 0
+        }
+        plotter.save_metrics_json(metrics, 'robustness_metrics.json')
 
 
 def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
@@ -386,6 +379,9 @@ def main():
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--save_dir", type=str, default="./cifar10c_results", help="Directory to save results")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--use_wandb", action="store_true", help="Use Weights & Biases logging")
+    parser.add_argument("--wandb_project", type=str, default="delayed-generalization", help="Wandb project name")
+    parser.add_argument("--wandb_name", type=str, default=None, help="Wandb run name")
     
     args = parser.parse_args()
     

@@ -27,6 +27,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from data.generate_synthetic_celeba import load_synthetic_celeba_dataset
+from visualization.bias_analysis import BiasAnalysisPlotter
 
 
 class CelebAModel(nn.Module):
@@ -234,39 +235,32 @@ class CelebATrainer:
         return results
     
     def _plot_results(self, save_dir: str):
-        """Plot training results"""
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        """Plot training results using centralized visualization"""
+        plotter = BiasAnalysisPlotter(save_dir)
         
-        # Loss curves
-        axes[0, 0].plot(self.train_losses, label='Train')
-        axes[0, 0].plot(self.test_losses, label='Test')
-        axes[0, 0].set_title('Loss Curves')
-        axes[0, 0].set_xlabel('Epoch')
-        axes[0, 0].set_ylabel('Loss')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True)
+        epochs = list(range(len(self.train_losses)))
         
-        # Accuracy curves
-        axes[0, 1].plot(self.train_accuracies, label='Train')
-        axes[0, 1].plot(self.test_accuracies, label='Test')
-        axes[0, 1].set_title('Accuracy Curves')
-        axes[0, 1].set_xlabel('Epoch')
-        axes[0, 1].set_ylabel('Accuracy (%)')
-        axes[0, 1].legend()
-        axes[0, 1].grid(True)
+        # Use centralized simplicity bias plotting
+        plotter.plot_simplicity_bias_curves(
+            epochs=epochs,
+            train_losses=self.train_losses,
+            test_losses=self.test_losses,
+            train_accuracies=self.train_accuracies,
+            test_accuracies=self.test_accuracies,
+            bias_accuracies=self.bias_accuracies,
+            bias_type="background",
+            save_name='bias_analysis.png'
+        )
         
-        # Bias analysis
-        axes[1, 0].plot(self.bias_accuracies, label='Bias Accuracy', color='red')
-        axes[1, 0].set_title('Spurious Correlation Learning')
-        axes[1, 0].set_xlabel('Epoch')
-        axes[1, 0].set_ylabel('Bias Accuracy (%)')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True)
-        
-        # Test vs Bias accuracy comparison
-        axes[1, 1].plot(self.test_accuracies, label='Test Accuracy')
-        axes[1, 1].plot(self.bias_accuracies, label='Bias Accuracy', color='red')
-        axes[1, 1].set_title('Test vs Bias Accuracy')
+        # Create summary statistics
+        bias_metrics = {
+            'final_test_acc': self.test_accuracies[-1] if self.test_accuracies else 0,
+            'final_bias_acc': self.bias_accuracies[-1] if self.bias_accuracies else 0,
+            'bias_gap': (self.bias_accuracies[-1] - self.test_accuracies[-1]) if (self.bias_accuracies and self.test_accuracies) else 0,
+            'final_train_loss': self.train_losses[-1] if self.train_losses else 0,
+            'final_test_loss': self.test_losses[-1] if self.test_losses else 0
+        }
+        plotter.plot_bias_summary_statistics(bias_metrics, 'bias_summary.png')
         axes[1, 1].set_xlabel('Epoch')
         axes[1, 1].set_ylabel('Accuracy (%)')
         axes[1, 1].legend()

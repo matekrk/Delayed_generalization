@@ -28,6 +28,7 @@ repo_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.append(str(repo_root))
 
 from data.vision.celeba.generate_bias_celeba import load_real_celeba_dataset, BiasedRealCelebADataset
+from visualization.bias_analysis import BiasAnalysisPlotter
 
 
 class RealCelebAModel(nn.Module):
@@ -382,51 +383,31 @@ class RealCelebATrainer:
         return results
     
     def _plot_results(self, save_dir: str):
-        """Plot training results with bias analysis"""
-        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        """Plot training results with bias analysis using centralized visualization"""
+        plotter = BiasAnalysisPlotter(save_dir)
         
-        epochs = self.epochs_logged
+        # Use centralized CelebA bias analysis plotting
+        plotter.plot_celeba_bias_analysis(
+            epochs=self.epochs_logged,
+            train_losses=self.train_losses,
+            test_losses=self.test_losses,
+            train_accuracies=self.train_accuracies,
+            test_accuracies=self.test_accuracies,
+            bias_conforming_accuracies=self.bias_conforming_accuracies,
+            bias_conflicting_accuracies=self.bias_conflicting_accuracies,
+            save_name='celeba_bias_analysis.png'
+        )
         
-        # Loss curves
-        axes[0, 0].plot(epochs, self.train_losses, label='Train', linewidth=2)
-        axes[0, 0].plot(epochs, self.test_losses, label='Test', linewidth=2)
-        axes[0, 0].set_title('Loss Curves', fontsize=14)
-        axes[0, 0].set_xlabel('Epoch')
-        axes[0, 0].set_ylabel('Loss')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # Accuracy curves
-        axes[0, 1].plot(epochs, self.train_accuracies, label='Train', linewidth=2)
-        axes[0, 1].plot(epochs, self.test_accuracies, label='Test', linewidth=2)
-        axes[0, 1].set_title('Overall Accuracy Curves', fontsize=14)
-        axes[0, 1].set_xlabel('Epoch')
-        axes[0, 1].set_ylabel('Accuracy (%)')
-        axes[0, 1].legend()
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # Bias analysis
-        axes[0, 2].plot(epochs, self.bias_conforming_accuracies, label='Bias Conforming', 
-                       color='green', linewidth=2)
-        axes[0, 2].plot(epochs, self.bias_conflicting_accuracies, label='Bias Conflicting', 
-                       color='red', linewidth=2)
-        axes[0, 2].set_title('Bias Analysis', fontsize=14)
-        axes[0, 2].set_xlabel('Epoch')
-        axes[0, 2].set_ylabel('Accuracy (%)')
-        axes[0, 2].legend()
-        axes[0, 2].grid(True, alpha=0.3)
-        
-        # Bias gap over time
-        bias_gap = np.array(self.bias_conforming_accuracies) - np.array(self.bias_conflicting_accuracies)
-        axes[1, 0].plot(epochs, bias_gap, color='purple', linewidth=2)
-        axes[1, 0].set_title('Bias Gap (Conforming - Conflicting)', fontsize=14)
-        axes[1, 0].set_xlabel('Epoch')
-        axes[1, 0].set_ylabel('Accuracy Gap (%)')
-        axes[1, 0].axhline(y=0, color='black', linestyle='--', alpha=0.5)
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # Test accuracy vs bias gap
-        axes[1, 1].scatter(self.test_accuracies, bias_gap, alpha=0.6, s=30)
+        # Create summary statistics
+        bias_metrics = {
+            'final_test_acc': self.test_accuracies[-1] if self.test_accuracies else 0,
+            'final_bias_conforming_acc': self.bias_conforming_accuracies[-1] if self.bias_conforming_accuracies else 0,
+            'final_bias_conflicting_acc': self.bias_conflicting_accuracies[-1] if self.bias_conflicting_accuracies else 0,
+            'final_bias_gap': (self.bias_conforming_accuracies[-1] - self.bias_conflicting_accuracies[-1]) if (self.bias_conforming_accuracies and self.bias_conflicting_accuracies) else 0,
+            'final_train_loss': self.train_losses[-1] if self.train_losses else 0,
+            'final_test_loss': self.test_losses[-1] if self.test_losses else 0
+        }
+        plotter.plot_bias_summary_statistics(bias_metrics, 'celeba_bias_summary.png')
         axes[1, 1].set_title('Test Accuracy vs Bias Gap', fontsize=14)
         axes[1, 1].set_xlabel('Test Accuracy (%)')
         axes[1, 1].set_ylabel('Bias Gap (%)')
