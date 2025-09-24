@@ -27,7 +27,7 @@ import time
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from models.simple_transformer import create_grokking_model
+from models.grokking.simple_transformer import create_grokking_model
 from utils.wandb_integration.delayed_generalization_logger import setup_wandb_for_phenomenon, create_wandb_config_from_args
 from visualization.training_curves import TrainingCurvePlotter
 # Robust import for the dataset loader: try the expected package path first,
@@ -41,7 +41,7 @@ except Exception:
         sys.path.append(str(repo_root))
         from data.algorithmic.modular_arithmetic.generate_data import load_dataset
     except Exception:
-        from data.grokking.datasets.algorithmic.modular_arithmetic.generate_data import load_dataset
+        from data.algorithmic.modular_arithmetic.generate_data import load_dataset # FIXIT.
 
 
 class GrokkingTrainer:

@@ -25,9 +25,9 @@ import time
 
 # Add parent directories to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
-sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from models.cnn_models import create_colored_mnist_model
+from models.vision.cnn_models import create_colored_mnist_model
 from data.vision.colored_mnist.generate_colored_mnist import load_colored_mnist_dataset, ColoredMNISTDataset
 from visualization.bias_analysis import BiasAnalysisPlotter
 try:
