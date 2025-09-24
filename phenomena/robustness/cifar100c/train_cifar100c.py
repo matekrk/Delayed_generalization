@@ -37,6 +37,7 @@ except ImportError:
     WANDB_AVAILABLE = False
 
 from models.cifar_models import CIFAR100CModel, create_cifar100c_model
+from data.vision.cifar100c import create_cifar100c_data_loaders
 
 
 class CIFAR100CTrainer:
@@ -337,46 +338,6 @@ class CIFAR100CTrainer:
         plt.tight_layout()
         plt.savefig(os.path.join(save_dir, 'training_curves.png'), dpi=300, bbox_inches='tight')
         plt.close()
-
-
-def create_cifar100c_data_loaders(data_dir: str, batch_size: int = 128, num_workers: int = 4):
-    """Create CIFAR-100-C data loaders"""
-    
-    # Standard CIFAR-100 transforms
-    train_transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
-    ])
-    
-    test_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
-    ])
-    
-    # Load clean CIFAR-100
-    train_dataset = datasets.CIFAR100(
-        root=data_dir, train=True, download=True, transform=train_transform
-    )
-    test_dataset = datasets.CIFAR100(
-        root=data_dir, train=False, download=True, transform=test_transform
-    )
-    
-    train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
-    )
-    test_loader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
-    )
-    
-    # TODO: Add actual CIFAR-100-C corruption loaders when available
-    # For now, we'll use the clean test set as a placeholder
-    corruption_loaders = {
-        'clean': test_loader  # Placeholder - will be replaced with actual corruptions
-    }
-    
-    return train_loader, test_loader, corruption_loaders
 
 
 def main():
