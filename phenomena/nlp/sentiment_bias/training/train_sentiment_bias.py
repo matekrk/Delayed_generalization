@@ -30,62 +30,7 @@ sys.path.append(str(repo_root))
 
 from optimization import get_default_optimizer, get_optimizer_stats
 from utils.wandb_integration.delayed_generalization_logger import setup_wandb_for_phenomenon, create_wandb_config_from_args
-
-
-class SentimentBiasModel(nn.Module):
-    """
-    Sentiment classification model for bias studies.
-    
-    Can use either simple embeddings or pre-trained transformers.
-    """
-    
-    def __init__(
-        self,
-        model_type: str = "simple",
-        vocab_size: int = 10000,
-        embed_dim: int = 128,
-        hidden_dim: int = 256,
-        num_classes: int = 2,
-        dropout: float = 0.1,
-        pretrained_model: str = "distilbert-base-uncased"
-    ):
-        super().__init__()
-        self.model_type = model_type
-        
-        if model_type == "simple":
-            # Simple model with embeddings
-            self.embedding = nn.Embedding(vocab_size, embed_dim)
-            self.lstm = nn.LSTM(embed_dim, hidden_dim, batch_first=True, dropout=dropout)
-            self.classifier = nn.Sequential(
-                nn.Linear(hidden_dim, hidden_dim // 2),
-                nn.ReLU(),
-                nn.Dropout(dropout),
-                nn.Linear(hidden_dim // 2, num_classes)
-            )
-        elif model_type == "transformer":
-            # Pre-trained transformer model
-            self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
-            self.transformer = AutoModel.from_pretrained(pretrained_model)
-            self.classifier = nn.Sequential(
-                nn.Dropout(dropout),
-                nn.Linear(self.transformer.config.hidden_size, num_classes)
-            )
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
-    
-    def forward(self, inputs):
-        if self.model_type == "simple":
-            # inputs should be token indices
-            embedded = self.embedding(inputs)
-            lstm_out, _ = self.lstm(embedded)
-            # Use mean pooling
-            pooled = torch.mean(lstm_out, dim=1)
-            return self.classifier(pooled)
-        else:
-            # inputs should be tokenized text
-            outputs = self.transformer(**inputs)
-            pooled = outputs.last_hidden_state[:, 0]  # Use [CLS] token
-            return self.classifier(pooled)
+from models.nlp.sentiment_models import SentimentBiasModel, create_sentiment_model
 
 
 class SentimentBiasTrainer:
@@ -535,7 +480,7 @@ def main():
     os.makedirs(full_save_dir, exist_ok=True)
     
     # Create model
-    model = SentimentBiasModel(
+    model = create_sentiment_model(
         model_type=args.model_type,
         vocab_size=10000,  # Would need proper vocab size calculation
         embed_dim=128,
