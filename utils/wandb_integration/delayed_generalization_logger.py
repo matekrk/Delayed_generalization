@@ -1182,6 +1182,145 @@ class DelayedGeneralizationLogger:
         
         return summary
     
+    def log_grokking_curves(
+        self,
+        epochs: List[int],
+        train_losses: List[float],
+        test_losses: List[float],
+        train_accuracies: List[float],
+        test_accuracies: List[float],
+        grokking_epoch: Optional[int] = None
+    ):
+        """
+        Log training curves for grokking experiments, creating visualizations and logging all metrics at once.
+        
+        Args:
+            epochs: List of epoch numbers
+            train_losses: Training losses over epochs
+            test_losses: Test losses over epochs
+            train_accuracies: Training accuracies over epochs
+            test_accuracies: Test accuracies over epochs
+            grokking_epoch: Epoch where grokking occurred (if detected)
+        """
+        # Create training curves visualization
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+        
+        # Loss curves
+        ax1.plot(epochs, train_losses, 'b-', label='Train Loss', alpha=0.7)
+        ax1.plot(epochs, test_losses, 'r-', label='Test Loss', alpha=0.7)
+        if grokking_epoch:
+            ax1.axvline(x=grokking_epoch, color='green', linestyle='--', alpha=0.8, label='Grokking')
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('Loss')
+        ax1.set_title('Training and Test Loss')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        
+        # Accuracy curves
+        ax2.plot(epochs, train_accuracies, 'b-', label='Train Acc', alpha=0.7)
+        ax2.plot(epochs, test_accuracies, 'r-', label='Test Acc', alpha=0.7)
+        if grokking_epoch:
+            ax2.axvline(x=grokking_epoch, color='green', linestyle='--', alpha=0.8, label='Grokking')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Accuracy')
+        ax2.set_title('Training and Test Accuracy')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        
+        # Generalization gap
+        generalization_gaps = [train_acc - test_acc for train_acc, test_acc in zip(train_accuracies, test_accuracies)]
+        ax3.plot(epochs, generalization_gaps, 'purple', alpha=0.7)
+        if grokking_epoch:
+            ax3.axvline(x=grokking_epoch, color='green', linestyle='--', alpha=0.8, label='Grokking')
+        ax3.set_xlabel('Epoch')
+        ax3.set_ylabel('Generalization Gap')
+        ax3.set_title('Generalization Gap (Train - Test Acc)')
+        ax3.grid(True, alpha=0.3)
+        if grokking_epoch:
+            ax3.legend()
+        
+        # Loss difference
+        loss_differences = [test_loss - train_loss for train_loss, test_loss in zip(train_losses, test_losses)]
+        ax4.plot(epochs, loss_differences, 'orange', alpha=0.7)
+        if grokking_epoch:
+            ax4.axvline(x=grokking_epoch, color='green', linestyle='--', alpha=0.8, label='Grokking')
+        ax4.set_xlabel('Epoch')
+        ax4.set_ylabel('Loss Difference')
+        ax4.set_title('Loss Difference (Test - Train)')
+        ax4.grid(True, alpha=0.3)
+        if grokking_epoch:
+            ax4.legend()
+        
+        plt.tight_layout()
+        
+        # Log to wandb
+        wandb.log({"grokking_curves": wandb.Image(fig)})
+        plt.close(fig)
+        
+        # Log final metrics from the curves
+        if epochs and train_losses and test_losses and train_accuracies and test_accuracies:
+            final_metrics = {
+                'curves/final_train_loss': train_losses[-1],
+                'curves/final_test_loss': test_losses[-1],
+                'curves/final_train_acc': train_accuracies[-1],
+                'curves/final_test_acc': test_accuracies[-1],
+                'curves/best_test_acc': max(test_accuracies),
+                'curves/final_generalization_gap': train_accuracies[-1] - test_accuracies[-1],
+                'curves/total_epochs': len(epochs)
+            }
+            
+            if grokking_epoch:
+                final_metrics['curves/grokking_epoch'] = grokking_epoch
+                final_metrics['curves/grokking_detected'] = 1
+            else:
+                final_metrics['curves/grokking_detected'] = 0
+                
+            wandb.log(final_metrics)
+
+    def log_epoch_metrics_batch(
+        self,
+        epochs: List[int],
+        train_losses: List[float],
+        test_losses: List[float], 
+        train_accuracies: List[float],
+        test_accuracies: List[float],
+        **additional_metrics
+    ):
+        """
+        Log all epoch metrics at once instead of individually.
+        Useful when you want to log training curves all at the end instead of per-epoch.
+        
+        Args:
+            epochs: List of epoch numbers
+            train_losses: Training losses for all epochs
+            test_losses: Test losses for all epochs
+            train_accuracies: Training accuracies for all epochs
+            test_accuracies: Test accuracies for all epochs
+            **additional_metrics: Additional metrics by epoch (should be lists of same length)
+        """
+        # Validate input lengths
+        lengths = [len(epochs), len(train_losses), len(test_losses), len(train_accuracies), len(test_accuracies)]
+        if not all(l == lengths[0] for l in lengths):
+            raise ValueError("All metric lists must have the same length")
+        
+        # Log all metrics for each epoch
+        for i, epoch in enumerate(epochs):
+            metrics = {
+                'epoch': epoch,
+                'train_loss': train_losses[i],
+                'test_loss': test_losses[i],
+                'train_acc': train_accuracies[i],
+                'test_acc': test_accuracies[i],
+                'generalization_gap': train_accuracies[i] - test_accuracies[i]
+            }
+            
+            # Add any additional metrics for this epoch
+            for key, values in additional_metrics.items():
+                if isinstance(values, list) and len(values) == len(epochs):
+                    metrics[key] = values[i]
+            
+            wandb.log(metrics, step=epoch)
+    
     def log_metrics(self, metrics: Dict[str, Any], step: Optional[int] = None):
         """
         Log metrics to wandb. This is a general-purpose logging method.

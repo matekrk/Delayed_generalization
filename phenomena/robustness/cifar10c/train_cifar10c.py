@@ -30,58 +30,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from data.vision.cifar10c.generate_cifar10c import load_cifar10c_dataset
 from data.vision.cifar10c.generate_cifar10c import CIFAR10CDataset
 from visualization.training_curves import TrainingCurvePlotter
-
-class CIFAR10CModel(nn.Module):
-    """CNN model for synthetic CIFAR-10-C classification"""
-    
-    def __init__(self, num_classes: int = 10, input_size: int = 32):
-        super().__init__()
-        
-        self.features = nn.Sequential(
-            # First conv block
-            nn.Conv2d(3, 64, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            nn.Dropout2d(0.25),
-            
-            # Second conv block
-            nn.Conv2d(64, 128, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            nn.Dropout2d(0.25),
-            
-            # Third conv block
-            nn.Conv2d(128, 256, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 256, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            nn.Dropout2d(0.25),
-        )
-        
-        # Calculate the size after conv layers
-        conv_output_size = input_size // (2 ** 3)  # 3 max pool operations
-        
-        self.classifier = nn.Sequential(
-            nn.Linear(256 * conv_output_size * conv_output_size, 512),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
-            nn.Linear(512, 256),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
-            nn.Linear(256, num_classes)
-        )
-        
-    def forward(self, x):
-        x = self.features(x)
-        x = x.view(x.size(0), -1)
-        x = self.classifier(x)
-        return x
-
+from models.cifar_models import CIFAR10CModel, create_cifar10c_model
 
 class CIFAR10CTrainer:
     """Trainer for synthetic CIFAR-10-C experiments"""
