@@ -190,6 +190,81 @@ class TrainingCurvePlotter:
         plt.savefig(os.path.join(self.save_dir, save_name), dpi=self.dpi, bbox_inches='tight')
         return fig
     
+    def plot_continual_learning_analysis(
+        self,
+        results: Dict[str, Any],
+        save_name: str = "continual_learning_analysis.png"
+    ) -> plt.Figure:
+        """Create comprehensive plots for continual learning results"""
+        
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        fig.suptitle('Continual Learning Results: CIFAR-100 (10 Tasks)', fontsize=16)
+        
+        # Plot 1: Task accuracies over time
+        for task_id in range(10):
+            task_accs = [results['task_accuracies_over_time'][completed_task].get(task_id, 0) 
+                        for completed_task in range(task_id, 10)]
+            if task_accs:
+                axes[0, 0].plot(range(task_id + 1, 11), task_accs, 
+                               label=f'Task {task_id + 1}', marker='o', alpha=0.7)
+        
+        axes[0, 0].set_xlabel('Tasks Completed')
+        axes[0, 0].set_ylabel('Accuracy (%)')
+        axes[0, 0].set_title('Task Accuracies Over Time')
+        axes[0, 0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # Plot 2: Average accuracy and forgetting
+        avg_accs = [metrics.get('average_accuracy', 0) for metrics in results['continual_learning_metrics']]
+        avg_forgetting = [metrics.get('average_forgetting', 0) for metrics in results['continual_learning_metrics']]
+        
+        ax2_twin = axes[0, 1].twinx()
+        
+        line1 = axes[0, 1].plot(range(1, 11), avg_accs, 'b-', marker='o', label='Avg Accuracy')
+        line2 = ax2_twin.plot(range(2, 11), avg_forgetting, 'r-', marker='s', label='Avg Forgetting', alpha=0.7)
+        
+        axes[0, 1].set_xlabel('Tasks Completed')
+        axes[0, 1].set_ylabel('Average Accuracy (%)', color='b')
+        ax2_twin.set_ylabel('Average Forgetting (%)', color='r')
+        axes[0, 1].set_title('Average Performance and Forgetting')
+        
+        # Combine legends
+        lines = line1 + line2
+        labels = [l.get_label() for l in lines]
+        axes[0, 1].legend(lines, labels, loc='center right')
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # Plot 3: Forward transfer
+        forward_transfers = [metrics.get('forward_transfer', 0) for metrics in results['continual_learning_metrics']]
+        if any(ft != 0 for ft in forward_transfers):
+            axes[1, 0].plot(range(2, 11), forward_transfers[1:], 'g-', marker='d', linewidth=2)
+            axes[1, 0].axhline(y=0, color='black', linestyle='--', alpha=0.5)
+            axes[1, 0].set_xlabel('Task Number')
+            axes[1, 0].set_ylabel('Forward Transfer (%)')
+            axes[1, 0].set_title('Forward Transfer (Initial Performance - Random)')
+            axes[1, 0].grid(True, alpha=0.3)
+        
+        # Plot 4: Final task accuracies
+        final_accs = list(results['final_task_accuracies'].values())
+        task_names = [f'Task {i+1}' for i in range(len(final_accs))]
+        
+        bars = axes[1, 1].bar(task_names, final_accs, alpha=0.7, color='skyblue', edgecolor='navy')
+        axes[1, 1].set_ylabel('Final Accuracy (%)')
+        axes[1, 1].set_title('Final Accuracy on All Tasks')
+        axes[1, 1].tick_params(axis='x', rotation=45)
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        # Add value labels on bars
+        for bar, acc in zip(bars, final_accs):
+            height = bar.get_height()
+            axes[1, 1].text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                           f'{acc:.1f}%', ha='center', va='bottom', fontsize=9)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.save_dir, save_name), dpi=self.dpi, bbox_inches='tight')
+        plt.close()
+        return fig
+    
     def save_metrics_json(self, metrics: Dict[str, Any], filename: str = "training_metrics.json"):
         """Save training metrics to JSON file"""
         with open(os.path.join(self.save_dir, filename), 'w') as f:

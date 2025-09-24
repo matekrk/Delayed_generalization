@@ -104,6 +104,15 @@ class DelayedGeneralizationLogger:
                 'transition_sharpness': [],
                 'capability_scores': []
             })
+        elif phenomenon_type == 'continual_learning':
+            self.metrics_history.update({
+                'task_accuracies': {},  # Dict of task_id -> list of accuracies
+                'forgetting_scores': [],
+                'average_accuracy': [],
+                'backward_transfer': [],
+                'forward_transfer': [],
+                'current_task': []
+            })
         
         # Phase transition detection
         self.phase_transitions = []
@@ -160,6 +169,8 @@ class DelayedGeneralizationLogger:
             self._log_bias_metrics(metrics, kwargs)
         elif self.phenomenon_type == 'phase_transitions':
             self._log_transition_metrics(metrics, kwargs)
+        elif self.phenomenon_type == 'continual_learning':
+            self._log_continual_metrics(metrics, kwargs)
         
         # Add any additional metrics
         metrics.update(kwargs)
@@ -281,6 +292,59 @@ class DelayedGeneralizationLogger:
                 metrics[f'capability_{cap_name}'] = score
             
             self.metrics_history['capability_scores'].append(cap_scores)
+    
+    def _log_continual_metrics(self, metrics: Dict, additional: Dict):
+        """Log continual learning-specific metrics."""
+        
+        # Task-specific accuracies
+        if 'task_accuracies' in additional:
+            task_accs = additional['task_accuracies']
+            
+            # Log individual task accuracies
+            for task_id, acc in task_accs.items():
+                metrics[f'task_{task_id}_accuracy'] = acc
+            
+            # Average accuracy across all tasks seen so far
+            avg_acc = np.mean(list(task_accs.values()))
+            metrics['average_task_accuracy'] = avg_acc
+            
+            # Store task accuracies
+            for task_id, acc in task_accs.items():
+                if task_id not in self.metrics_history['task_accuracies']:
+                    self.metrics_history['task_accuracies'][task_id] = []
+                self.metrics_history['task_accuracies'][task_id].append(acc)
+            
+            self.metrics_history['average_accuracy'].append(avg_acc)
+        
+        # Current task being trained
+        if 'current_task' in additional:
+            current_task = additional['current_task']
+            metrics['current_task'] = current_task
+            self.metrics_history['current_task'].append(current_task)
+        
+        # Forgetting metrics
+        if 'forgetting_score' in additional:
+            forgetting = additional['forgetting_score']
+            metrics['average_forgetting'] = forgetting
+            self.metrics_history['forgetting_scores'].append(forgetting)
+        
+        # Transfer learning metrics
+        if 'backward_transfer' in additional:
+            bt = additional['backward_transfer']
+            metrics['backward_transfer'] = bt
+            self.metrics_history['backward_transfer'].append(bt)
+        
+        if 'forward_transfer' in additional:
+            ft = additional['forward_transfer']
+            metrics['forward_transfer'] = ft
+            self.metrics_history['forward_transfer'].append(ft)
+        
+        # Stability-plasticity metrics
+        if 'stability_score' in additional:
+            metrics['stability_score'] = additional['stability_score']
+        
+        if 'plasticity_score' in additional:
+            metrics['plasticity_score'] = additional['plasticity_score']
     
     def _detect_phase_transitions(self, current_epoch: int):
         """Detect phase transitions in training dynamics."""
