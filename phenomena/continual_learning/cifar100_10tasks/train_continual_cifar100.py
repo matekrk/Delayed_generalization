@@ -436,7 +436,7 @@ class ContinualLearningTrainer:
         # Forward transfer (if not first task)
         if self.completed_tasks > 0:
             # Compare first epoch accuracy on current task to random baseline
-            current_task_initial_acc = self.task_histories[self.completed_tasks]['train_accuracies'][0]
+            current_task_initial_acc = self.task_histories[self.completed_tasks-1]['train_accuracies'][0]
             random_baseline = 100.0 / 10  # 10 classes per task
             forward_transfer = current_task_initial_acc - random_baseline
             metrics['forward_transfer'] = forward_transfer
@@ -622,6 +622,8 @@ def main():
                        help='Device to use (auto, cpu, cuda)')
     
     # WandB arguments
+    parser.add_argument('--use_wandb', action='store_true',
+                       help='Use WandB for logging')
     parser.add_argument('--wandb_project', type=str, default=None,
                        help='WandB project name')
     parser.add_argument('--wandb_name', type=str, default=None,
@@ -655,7 +657,7 @@ def main():
     
     # Setup WandB if requested
     wandb_logger = None
-    if args.wandb_project and WANDB_AVAILABLE:
+    if args.use_wandb and args.wandb_project and WANDB_AVAILABLE:
         config = {
             'epochs_per_task': args.epochs_per_task,
             'batch_size': args.batch_size,

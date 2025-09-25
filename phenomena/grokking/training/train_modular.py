@@ -429,8 +429,9 @@ def main():
             
             # Generate run name if not provided
             if not args.wandb_name:
-                args.wandb_name = f"grokking_d{args.d_model}_wd{args.weight_decay}_lr{args.learning_rate}"
-            
+                data_spec = args.data_dir.split('/')[-1]
+                args.wandb_name = f"grokking_{data_spec}_{args.data_fraction}_d{args.d_model}_wd{args.weight_decay}_lr{args.learning_rate}"
+
             # Setup wandb logger
             wandb_logger = setup_wandb_for_phenomenon(
                 phenomenon_type='grokking',

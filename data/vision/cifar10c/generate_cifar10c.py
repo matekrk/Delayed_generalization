@@ -10,6 +10,7 @@ Usage:
 """
 
 import argparse
+import sys
 import numpy as np
 import torch
 import torchvision
@@ -22,6 +23,7 @@ from typing import Tuple, Dict, List, Optional
 from PIL import Image, ImageFilter, ImageEnhance
 import cv2
 
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from data.vision.cifar10c.generate_synthetic_cifar10c import SyntheticCIFAR10CDataset
 
 

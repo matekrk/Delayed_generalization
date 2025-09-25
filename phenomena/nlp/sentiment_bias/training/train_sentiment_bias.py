@@ -25,7 +25,7 @@ from transformers import AutoTokenizer, AutoModel
 import wandb
 
 # Add parent directories to path for imports
-repo_root = Path(__file__).parent.parent.parent.parent
+repo_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.append(str(repo_root))
 
 from optimization import get_default_optimizer, get_optimizer_stats
@@ -45,6 +45,8 @@ class SentimentBiasTrainer:
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
         use_wandb: bool = False,
+        wandb_project: str = "delayed-generalization-nlp",
+        wandb_tags: Optional[List[str]] = None,
         experiment_name: str = "sentiment_bias"
     ):
         self.model = model.to(device)
@@ -52,6 +54,8 @@ class SentimentBiasTrainer:
         self.test_loader = test_loader
         self.device = device
         self.use_wandb = use_wandb
+        self.wandb_tags = wandb_tags
+        self.experiment_name = experiment_name
         
         # Setup optimizer using enhanced optimizers
         try:
@@ -84,14 +88,15 @@ class SentimentBiasTrainer:
         # Initialize wandb if requested
         if self.use_wandb:
             wandb.init(
-                project="delayed-generalization-nlp",
+                project=wandb_project,
                 name=experiment_name,
                 config={
                     'learning_rate': learning_rate,
                     'weight_decay': weight_decay,
                     'model_type': model.__class__.__name__,
                     'optimizer': type(self.optimizer).__name__
-                }
+                },
+                tags=self.wandb_tags
             )
     
     def tokenize_batch(self, texts: List[str]):
@@ -427,6 +432,10 @@ def main():
     parser.add_argument("--data_fraction", type=float, default=1.0, 
                        help="Fraction of dataset to use (0.0-1.0, default: 1.0 for full dataset)")
     parser.add_argument("--use_wandb", action="store_true", help="Enable wandb logging")
+    parser.add_argument("--wandb_project", type=str, default="delayed-generalization-nlp", 
+                       help="WandB project name")
+    parser.add_argument("--wandb_tags", type=str, nargs="*", default=None,
+                       help="Wandb tags for the run")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--log_interval", type=int, default=10, help="Logging interval")
     
@@ -497,6 +506,8 @@ def main():
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         use_wandb=args.use_wandb,
+        wandb_project=args.wandb_project,
+        wandb_tags=args.wandb_tags,
         experiment_name=experiment_name
     )
     

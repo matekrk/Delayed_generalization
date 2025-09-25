@@ -111,7 +111,9 @@ class RealCelebATrainer:
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
         use_wandb: bool = False,
-        experiment_name: str = "real_celeba_bias"
+        experiment_name: str = "real_celeba_bias",
+        wandb_project: str = "delayed-generalization-celeba",
+        wandb_tags: Optional[List[str]] = None
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
@@ -158,13 +160,14 @@ class RealCelebATrainer:
         # Initialize wandb if requested
         if self.use_wandb:
             wandb.init(
-                project="delayed-generalization-celeba",
+                project=wandb_project,
                 name=experiment_name,
                 config={
                     "learning_rate": learning_rate,
                     "weight_decay": weight_decay,
                     "model": "RealCelebAModel"
-                }
+                },
+                tags=wandb_tags
             )
         
     def train_epoch(self):
@@ -481,6 +484,8 @@ def main():
                        help="Fraction of dataset to use (0.0-1.0, default: 1.0 for full dataset)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--use_wandb", action="store_true", help="Use Weights & Biases logging")
+    parser.add_argument("--wandb_project", type=str, default="delayed-generalization-celeba", help="WandB project name")
+    parser.add_argument("--wandb_tags", type=str, nargs='*', default=None, help="WandB tags")
     parser.add_argument("--log_interval", type=int, default=10, help="Logging interval")
     
     args = parser.parse_args()
@@ -547,7 +552,9 @@ def main():
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         use_wandb=args.use_wandb,
-        experiment_name=experiment_name
+        experiment_name=experiment_name,
+        wandb_project=args.wandb_project,
+        wandb_tags=args.wandb_tags
     )
     
     # Train model
