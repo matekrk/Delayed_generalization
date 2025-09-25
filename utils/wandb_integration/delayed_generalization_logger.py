@@ -118,6 +118,9 @@ class DelayedGeneralizationLogger:
         self.phase_transitions = []
         self.last_transition_check = 0
         
+        # Step tracking to avoid wandb monotonic warnings
+        self.max_step_logged = -1
+        
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
         
@@ -175,8 +178,13 @@ class DelayedGeneralizationLogger:
         # Add any additional metrics
         metrics.update(kwargs)
         
-        # Log to wandb
-        wandb.log(metrics, step=epoch)
+        # Log to wandb only if step is greater than previously logged
+        if epoch > self.max_step_logged:
+            wandb.log(metrics, step=epoch)
+            self.max_step_logged = epoch
+        else:
+            # Log without step to avoid monotonic warning
+            wandb.log(metrics)
         
         # Check for phase transitions
         if epoch - self.last_transition_check >= 100:  # Check every 100 epochs
@@ -427,7 +435,11 @@ class DelayedGeneralizationLogger:
         
         # Log analysis metrics
         if analysis_metrics:
-            wandb.log(analysis_metrics, step=epoch)
+            if epoch > self.max_step_logged:
+                wandb.log(analysis_metrics, step=epoch)
+                self.max_step_logged = epoch
+            else:
+                wandb.log(analysis_metrics)
     
     def _analyze_weights(self, model: torch.nn.Module) -> Dict[str, float]:
         """Analyze weight distributions and norms."""
@@ -1060,6 +1072,7 @@ class DelayedGeneralizationLogger:
         axes[1, 0].grid(True, alpha=0.3)
         
         # Phenomenon-specific plot
+        has_legend_data = False
         if self.phenomenon_type == 'grokking' and self.metrics_history['weight_norms']:
             # Weight norm evolution
             weight_norm_means = [np.mean(list(wn.values())) for wn in self.metrics_history['weight_norms']]
@@ -1068,6 +1081,7 @@ class DelayedGeneralizationLogger:
             axes[1, 1].set_xlabel('Epoch')
             axes[1, 1].set_ylabel('Weight Norm')
             axes[1, 1].set_title('Weight Norm Evolution')
+            has_legend_data = True
             
         elif self.phenomenon_type == 'simplicity_bias' and self.metrics_history['worst_group_acc']:
             # Worst group accuracy
@@ -1077,6 +1091,7 @@ class DelayedGeneralizationLogger:
             axes[1, 1].set_xlabel('Epoch')
             axes[1, 1].set_ylabel('Worst Group Accuracy')
             axes[1, 1].set_title('Worst Group Performance')
+            has_legend_data = True
             
         else:
             # Default: learning rate or other metric
@@ -1084,7 +1099,9 @@ class DelayedGeneralizationLogger:
                            transform=axes[1, 1].transAxes, ha='center', va='center')
             axes[1, 1].set_title('Additional Metrics')
         
-        axes[1, 1].legend()
+        # Only add legend if there are labeled plot elements
+        if has_legend_data:
+            axes[1, 1].legend()
         axes[1, 1].grid(True, alpha=0.3)
         
         # Mark phase transitions
@@ -1274,36 +1291,46 @@ class DelayedGeneralizationLogger:
                 len(train_accuracies) == len(test_accuracies)):
             raise ValueError("All metric lists must have the same length")
         
+        # Sort epochs to ensure monotonic order
+        sorted_indices = sorted(range(len(epochs)), key=lambda i: epochs[i])
+        
         # Log each epoch's metrics
-        for i, epoch in enumerate(epochs):
+        for idx in sorted_indices:
+            epoch = epochs[idx]
+            
+            # Skip if we've already logged to this step or a later one
+            if epoch <= self.max_step_logged:
+                continue
+                
             metrics = {
                 'epoch': epoch,
-                'train_loss': train_losses[i],
-                'test_loss': test_losses[i],
-                'train_acc': train_accuracies[i],
-                'test_acc': test_accuracies[i],
-                'generalization_gap': train_accuracies[i] - test_accuracies[i]
+                'train_loss': train_losses[idx],
+                'test_loss': test_losses[idx],
+                'train_acc': train_accuracies[idx],
+                'test_acc': test_accuracies[idx],
+                'generalization_gap': train_accuracies[idx] - test_accuracies[idx]
             }
             
             # Add any additional metrics
             for key, values in kwargs.items():
                 if isinstance(values, (list, tuple)) and len(values) == len(epochs):
-                    metrics[key] = values[i]
+                    metrics[key] = values[idx]
                 else:
                     # If not a list, use the same value for all epochs
                     metrics[key] = values
             
             # Log to wandb
             wandb.log(metrics, step=epoch)
+            self.max_step_logged = epoch
             
             # Store in history (avoid duplicates)
             if epoch not in self.metrics_history['epochs']:
                 self.metrics_history['epochs'].append(epoch)
-                self.metrics_history['train_loss'].append(train_losses[i])
-                self.metrics_history['test_loss'].append(test_losses[i])
-                self.metrics_history['train_acc'].append(train_accuracies[i])
-                self.metrics_history['test_acc'].append(test_accuracies[i])
-                self.metrics_history['generalization_gap'].append(train_accuracies[i] - test_accuracies[i])
+                self.metrics_history['train_loss'].append(train_losses[idx])
+                self.metrics_history['test_loss'].append(test_losses[idx])
+                self.metrics_history['train_acc'].append(train_accuracies[idx])
+                self.metrics_history['test_acc'].append(test_accuracies[idx])
+                self.metrics_history['generalization_gap'].append(train_accuracies[idx] - test_accuracies[idx])
     
     def log_grokking_curves(
         self,
@@ -1415,7 +1442,11 @@ class DelayedGeneralizationLogger:
             metrics: Dictionary of metrics to log
             step: Optional step number for the metrics
         """
-        wandb.log(metrics, step=step)
+        if step is not None and step > self.max_step_logged:
+            wandb.log(metrics, step=step)
+            self.max_step_logged = step
+        else:
+            wandb.log(metrics)
     
     def finish(self):
         """Finish the wandb run."""
