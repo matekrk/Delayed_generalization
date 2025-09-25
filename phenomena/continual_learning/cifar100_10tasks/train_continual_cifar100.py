@@ -374,7 +374,7 @@ class ContinualLearningTrainer:
         
         task_accuracies = {}
         
-        for task_id in range(self.completed_tasks + 1):
+        for task_id in range(self.completed_tasks):
             _, test_loader, task_classes = self.create_task_data_loaders(
                 task_id, data_dir, batch_size
             )

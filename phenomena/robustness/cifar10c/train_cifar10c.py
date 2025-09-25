@@ -350,6 +350,7 @@ def main():
     parser.add_argument("--use_wandb", action="store_true", help="Use Weights & Biases logging")
     parser.add_argument("--wandb_project", type=str, default="delayed-generalization", help="Wandb project name")
     parser.add_argument("--wandb_name", type=str, default=None, help="Wandb run name")
+    parser.add_argument("--wandb_tags", type=str, nargs='*', default=None, help="Wandb tags")
     
     args = parser.parse_args()
     
