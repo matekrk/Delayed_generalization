@@ -428,6 +428,10 @@ def visualize_cifar10c(datasets: Dict[str, CIFAR10CDataset], num_samples: int = 
     
     fig.suptitle('CIFAR-10-C Corruption Examples', fontsize=16)
     
+    # CIFAR-10 normalization constants
+    cifar10_mean = np.array([0.485, 0.456, 0.406])
+    cifar10_std = np.array([0.229, 0.224, 0.225])
+    
     for row, corruption_type in enumerate(corruption_types):
         dataset = datasets[corruption_type]
         indices = np.random.choice(len(dataset), num_samples, replace=False)
@@ -435,11 +439,14 @@ def visualize_cifar10c(datasets: Dict[str, CIFAR10CDataset], num_samples: int = 
         for col, idx in enumerate(indices):
             image, label, metadata = dataset[idx]
             
-            # Convert tensor to numpy
+            # Convert tensor to numpy and rearrange dimensions
             img_np = image.permute(1, 2, 0).numpy()
-            # Denormalize if needed
-            if img_np.min() < 0:
-                img_np = img_np * 0.5 + 0.5
+            
+            # Properly denormalize CIFAR-10 images to [0, 1] range
+            # First, denormalize from standard CIFAR-10 normalization
+            img_np = img_np * cifar10_std + cifar10_mean
+            
+            # Ensure values are in [0, 1] range for proper display
             img_np = np.clip(img_np, 0, 1)
             
             axes[row, col].imshow(img_np)

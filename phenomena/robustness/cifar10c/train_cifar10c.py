@@ -304,6 +304,23 @@ def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader
     train_images, train_labels, train_corruptions = dataset_to_tensors(train_dataset)
     test_images, test_labels, test_corruptions = dataset_to_tensors(test_dataset)
     
+    # Apply CIFAR-10 normalization to improve training
+    # CIFAR-10 normalization statistics
+    cifar10_mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+    cifar10_std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+    
+    # Normalize images to [0, 1] first if they're not already
+    if train_images.max() > 1.0:
+        train_images = train_images / 255.0
+        test_images = test_images / 255.0
+    
+    # Apply standard CIFAR-10 normalization
+    train_images = (train_images - cifar10_mean) / cifar10_std
+    test_images = (test_images - cifar10_mean) / cifar10_std
+    
+    print(f"Data normalization applied - Train images shape: {train_images.shape}")
+    print(f"Train images range: [{train_images.min():.3f}, {train_images.max():.3f}]")
+    
     # Create data loaders
     train_loader = DataLoader(
         TensorDataset(train_images, train_labels, train_corruptions),
@@ -325,7 +342,8 @@ def main():
     parser.add_argument("--data_dir", type=str, required=True, help="Path to dataset directory")
     parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
-    parser.add_argument("--learning_rate", type=float, default=1e-3, help="Learning rate")
+    parser.add_argument("--learning_rate", type=float, default=1e-4, 
+                       help="Learning rate (default: 1e-4, lower due to normalization)")
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--save_dir", type=str, default="./cifar10c_results", help="Directory to save results")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
