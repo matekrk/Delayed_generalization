@@ -60,7 +60,8 @@ def generate_synthetic_sentiment_data(
     random.seed(seed)
     np.random.seed(seed)
     
-    # Template sentences for different topics and sentiments
+    # Comprehensive template sentences for different topics and sentiments
+    # Significantly expanded from the original 5 per category to 20+ per category
     templates = {
         "technology": {
             "positive": [
@@ -68,14 +69,48 @@ def generate_synthetic_sentiment_data(
                 "The software update improved everything significantly.",
                 "The user interface is intuitive and well-designed.",
                 "The device works perfectly and exceeds expectations.",
-                "Innovation in tech continues to impress users everywhere."
+                "Innovation in tech continues to impress users everywhere.",
+                "The app runs smoothly and loads incredibly fast.",
+                "This gadget has revolutionized my daily workflow.",
+                "The battery life is outstanding and lasts all day.",
+                "The camera quality produces stunning professional photos.",
+                "The processing speed is lightning fast and responsive.",
+                "This technology is cutting-edge and ahead of its time.",
+                "The build quality feels premium and exceptionally durable.",
+                "The screen display is crisp, bright, and vibrant.",
+                "The sound quality is crystal clear and immersive.",
+                "This device integrates seamlessly with other systems.",
+                "The security features provide excellent protection.",
+                "The wireless connectivity is stable and reliable.",
+                "This software solved all my previous problems.",
+                "The artificial intelligence features are remarkably smart.",
+                "The cloud synchronization works flawlessly across devices.",
+                "The interface design is modern and aesthetically pleasing.",
+                "This technology has made my work incredibly efficient."
             ],
             "negative": [
                 "This device has too many bugs and crashes frequently.",
                 "The software is confusing and poorly designed.",
                 "The user experience is frustrating and slow.",
                 "Technical issues make this product nearly unusable.",
-                "The technology feels outdated and disappointing."
+                "The technology feels outdated and disappointing.",
+                "The app constantly freezes and becomes unresponsive.",
+                "This gadget is overpriced for what it delivers.",
+                "The battery drains way too quickly throughout the day.",
+                "The camera produces blurry and low-quality images.",
+                "The processing is sluggish and causes annoying delays.",
+                "This technology is buggy and unreliable for daily use.",
+                "The build quality feels cheap and fragile.",
+                "The screen is dim and difficult to see clearly.",
+                "The audio quality is muffled and distorted.",
+                "This device fails to connect with other systems.",
+                "The security measures are weak and concerning.",
+                "The wireless connection drops out constantly.",
+                "This software created more problems than it solved.",
+                "The artificial intelligence features rarely work correctly.",
+                "The cloud sync frequently fails and loses data.",
+                "The interface is cluttered and hard to navigate.",
+                "This technology has made my workflow more complicated."
             ]
         },
         "food": {
@@ -84,14 +119,48 @@ def generate_synthetic_sentiment_data(
                 "The flavors are incredible and perfectly balanced.",
                 "Every dish is prepared with excellent ingredients.",
                 "The dining experience was absolutely wonderful.",
-                "The chef creates amazing culinary masterpieces."
+                "The chef creates amazing culinary masterpieces.",
+                "The pasta was cooked to perfection with rich sauce.",
+                "This meal exceeded all my expectations completely.",
+                "The presentation was beautiful and Instagram-worthy.",
+                "The service was attentive and professionally friendly.",
+                "The atmosphere was cozy and romantically intimate.",
+                "The dessert was heavenly and melted in my mouth.",
+                "The wine pairing complemented the meal perfectly.",
+                "Fresh ingredients make every bite absolutely delightful.",
+                "The portion sizes were generous and satisfying.",
+                "The restaurant ambiance was elegant and sophisticated.",
+                "The seasonal menu offers creative and innovative dishes.",
+                "The bread was warm, fresh, and aromatic.",
+                "This place offers exceptional value for the quality.",
+                "The staff was knowledgeable about dietary restrictions.",
+                "The kitchen timing was perfect for our large group.",
+                "The local ingredients really shine in every dish.",
+                "This dining experience was truly memorable and special."
             ],
             "negative": [
                 "The food was bland and completely flavorless.",
                 "The service was slow and the meal was cold.",
                 "Ingredients seemed stale and poorly prepared.",
                 "The dining experience was quite disappointing.",
-                "The meal was overpriced and unsatisfying."
+                "The meal was overpriced and unsatisfying.",
+                "The pasta was overcooked and mushy throughout.",
+                "This meal fell far short of my expectations.",
+                "The presentation looked sloppy and unappetizing.",
+                "The service was rude and unprofessionally slow.",
+                "The atmosphere was noisy and uncomfortably cramped.",
+                "The dessert was sickeningly sweet and artificial tasting.",
+                "The wine selection was limited and overpriced.",
+                "The ingredients tasted processed and low quality.",
+                "The portion sizes were tiny and left me hungry.",
+                "The restaurant felt dirty and poorly maintained.",
+                "The menu was boring with no creative options.",
+                "The bread was stale and clearly day-old.",
+                "This place is overpriced for such poor quality.",
+                "The staff ignored my serious food allergies.",
+                "The kitchen was disorganized and made us wait forever.",
+                "The ingredients were clearly not fresh or local.",
+                "This dining experience was forgettable and regrettable."
             ]
         },
         "travel": {
@@ -100,14 +169,48 @@ def generate_synthetic_sentiment_data(
                 "Beautiful scenery and wonderful weather throughout.",
                 "The destination exceeded all our expectations.",
                 "Every moment of the trip was memorable.",
-                "The travel experience was smooth and enjoyable."
+                "The travel experience was smooth and enjoyable.",
+                "The hotel provided exceptional service and comfort.",
+                "The local culture was fascinating and enriching.",
+                "The activities were exciting and well-organized.",
+                "The flight was comfortable with excellent service.",
+                "The transportation system was efficient and reliable.",
+                "The tour guide was knowledgeable and entertaining.",
+                "The beaches were pristine with crystal clear water.",
+                "The hiking trails offered breathtaking mountain views.",
+                "The local cuisine was authentic and absolutely delicious.",
+                "The museums showcased incredible historical artifacts.",
+                "The shopping districts had unique and interesting items.",
+                "The nightlife was vibrant and full of energy.",
+                "The accommodations were luxurious and well-appointed.",
+                "The weather was perfect for all outdoor activities.",
+                "The local people were friendly and welcoming.",
+                "The travel planning made everything seamless and stress-free.",
+                "This destination offers something special for everyone."
             ],
             "negative": [
                 "The trip was exhausting and poorly planned.",
                 "Weather was terrible and ruined our plans.",
                 "The destination was crowded and overpriced.",
                 "Travel delays made the experience frustrating.",
-                "The vacation was stressful and disappointing."
+                "The vacation was stressful and disappointing.",
+                "The hotel was dirty with terrible customer service.",
+                "The local culture felt commercialized and inauthentic.",
+                "The activities were boring and poorly organized.",
+                "The flight was cramped with rude staff members.",
+                "The transportation system was confusing and unreliable.",
+                "The tour guide was unprofessional and clearly uninformed.",
+                "The beaches were polluted with murky brown water.",
+                "The hiking trails were dangerous and poorly maintained.",
+                "The local food was bland and made me sick.",
+                "The museums were overpriced with boring exhibits.",
+                "The shopping areas were touristy with overpriced junk.",
+                "The nightlife was dead and utterly boring.",
+                "The accommodations were run-down and uncomfortable.",
+                "The weather was awful and rained constantly.",
+                "The local people were unfriendly and seemed annoyed.",
+                "The travel planning was chaotic and full of mistakes.",
+                "This destination was a complete waste of money."
             ]
         },
         "books": {
@@ -116,14 +219,48 @@ def generate_synthetic_sentiment_data(
                 "The characters were well-developed and relatable.",
                 "The plot was compelling and kept me reading.",
                 "The author's writing style is exceptional.",
-                "This book is a true literary masterpiece."
+                "This book is a true literary masterpiece.",
+                "The dialogue felt natural and realistic throughout.",
+                "The pacing was perfect and maintained my interest.",
+                "The world-building was detailed and immersive.",
+                "The themes were thought-provoking and meaningful.",
+                "The character development was masterfully handled.",
+                "The plot twists were surprising yet logical.",
+                "The emotional depth made me cry multiple times.",
+                "The research was thorough and historically accurate.",
+                "The prose was eloquent and beautifully crafted.",
+                "The narrative structure was innovative and effective.",
+                "The ending was satisfying and tied everything together.",
+                "The book tackled complex issues with sensitivity.",
+                "The atmosphere was perfectly created and maintained.",
+                "The symbolism was subtle yet powerfully meaningful.",
+                "The character relationships felt authentic and complex.",
+                "This author has a unique and captivating voice.",
+                "The book left me thinking long after finishing."
             ],
             "negative": [
                 "The plot was confusing and poorly structured.",
                 "The characters felt flat and unrealistic.",
                 "The writing style was boring and repetitive.",
                 "The story dragged and lost my interest.",
-                "The book was disappointing and hard to finish."
+                "The book was disappointing and hard to finish.",
+                "The dialogue was stilted and completely unnatural.",
+                "The pacing was terrible and made me impatient.",
+                "The world-building was shallow and unconvincing.",
+                "The themes were heavy-handed and preachy.",
+                "The character development was non-existent and flat.",
+                "The plot twists were predictable and clichéd.",
+                "The emotional moments felt forced and manipulative.",
+                "The research was sloppy with obvious factual errors.",
+                "The prose was clunky and difficult to read.",
+                "The narrative structure was confusing and disjointed.",
+                "The ending was abrupt and left too many loose ends.",
+                "The book oversimplified complex issues badly.",
+                "The atmosphere was inconsistent and poorly maintained.",
+                "The symbolism was heavy-handed and obvious.",
+                "The character relationships were unrealistic and shallow.",
+                "This author needs to work on their craft significantly.",
+                "The book was a waste of time and money."
             ]
         }
     }

@@ -408,30 +408,6 @@ class RealCelebATrainer:
             'final_test_loss': self.test_losses[-1] if self.test_losses else 0
         }
         plotter.plot_bias_summary_statistics(bias_metrics, 'celeba_bias_summary.png')
-        axes[1, 1].set_title('Test Accuracy vs Bias Gap', fontsize=14)
-        axes[1, 1].set_xlabel('Test Accuracy (%)')
-        axes[1, 1].set_ylabel('Bias Gap (%)')
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        # Final comparison
-        final_metrics = ['Test Acc', 'Bias Conform', 'Bias Conflict']
-        final_values = [self.test_accuracies[-1], self.bias_conforming_accuracies[-1], 
-                       self.bias_conflicting_accuracies[-1]]
-        colors = ['blue', 'green', 'red']
-        
-        bars = axes[1, 2].bar(final_metrics, final_values, color=colors, alpha=0.7)
-        axes[1, 2].set_title('Final Performance Comparison', fontsize=14)
-        axes[1, 2].set_ylabel('Accuracy (%)')
-        axes[1, 2].set_ylim(0, 100)
-        
-        # Add value labels on bars
-        for bar, value in zip(bars, final_values):
-            axes[1, 2].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, 
-                           f'{value:.1f}%', ha='center', va='bottom', fontweight='bold')
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, 'training_results.png'), dpi=150, bbox_inches='tight')
-        plt.close()
 
 
 def create_data_loaders(data_dir: str, batch_size: int = 32, data_fraction: float = 1.0) -> Tuple[DataLoader, DataLoader, Dict]:

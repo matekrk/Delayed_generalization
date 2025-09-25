@@ -104,6 +104,15 @@ class DelayedGeneralizationLogger:
                 'transition_sharpness': [],
                 'capability_scores': []
             })
+        elif phenomenon_type == 'continual_learning':
+            self.metrics_history.update({
+                'task_accuracies': {},  # Dict of task_id -> list of accuracies
+                'forgetting_scores': [],
+                'average_accuracy': [],
+                'backward_transfer': [],
+                'forward_transfer': [],
+                'current_task': []
+            })
         
         # Phase transition detection
         self.phase_transitions = []
@@ -160,6 +169,8 @@ class DelayedGeneralizationLogger:
             self._log_bias_metrics(metrics, kwargs)
         elif self.phenomenon_type == 'phase_transitions':
             self._log_transition_metrics(metrics, kwargs)
+        elif self.phenomenon_type == 'continual_learning':
+            self._log_continual_metrics(metrics, kwargs)
         
         # Add any additional metrics
         metrics.update(kwargs)
@@ -281,6 +292,59 @@ class DelayedGeneralizationLogger:
                 metrics[f'capability_{cap_name}'] = score
             
             self.metrics_history['capability_scores'].append(cap_scores)
+    
+    def _log_continual_metrics(self, metrics: Dict, additional: Dict):
+        """Log continual learning-specific metrics."""
+        
+        # Task-specific accuracies
+        if 'task_accuracies' in additional:
+            task_accs = additional['task_accuracies']
+            
+            # Log individual task accuracies
+            for task_id, acc in task_accs.items():
+                metrics[f'task_{task_id}_accuracy'] = acc
+            
+            # Average accuracy across all tasks seen so far
+            avg_acc = np.mean(list(task_accs.values()))
+            metrics['average_task_accuracy'] = avg_acc
+            
+            # Store task accuracies
+            for task_id, acc in task_accs.items():
+                if task_id not in self.metrics_history['task_accuracies']:
+                    self.metrics_history['task_accuracies'][task_id] = []
+                self.metrics_history['task_accuracies'][task_id].append(acc)
+            
+            self.metrics_history['average_accuracy'].append(avg_acc)
+        
+        # Current task being trained
+        if 'current_task' in additional:
+            current_task = additional['current_task']
+            metrics['current_task'] = current_task
+            self.metrics_history['current_task'].append(current_task)
+        
+        # Forgetting metrics
+        if 'forgetting_score' in additional:
+            forgetting = additional['forgetting_score']
+            metrics['average_forgetting'] = forgetting
+            self.metrics_history['forgetting_scores'].append(forgetting)
+        
+        # Transfer learning metrics
+        if 'backward_transfer' in additional:
+            bt = additional['backward_transfer']
+            metrics['backward_transfer'] = bt
+            self.metrics_history['backward_transfer'].append(bt)
+        
+        if 'forward_transfer' in additional:
+            ft = additional['forward_transfer']
+            metrics['forward_transfer'] = ft
+            self.metrics_history['forward_transfer'].append(ft)
+        
+        # Stability-plasticity metrics
+        if 'stability_score' in additional:
+            metrics['stability_score'] = additional['stability_score']
+        
+        if 'plasticity_score' in additional:
+            metrics['plasticity_score'] = additional['plasticity_score']
     
     def _detect_phase_transitions(self, current_epoch: int):
         """Detect phase transitions in training dynamics."""
@@ -1181,6 +1245,167 @@ class DelayedGeneralizationLogger:
             summary['total_abilities_tracked'] = len(final_abilities)
         
         return summary
+    
+    def log_epochs_metrics(
+        self,
+        epochs: List[int],
+        train_losses: List[float],
+        test_losses: List[float],
+        train_accuracies: List[float],
+        test_accuracies: List[float],
+        **kwargs
+    ):
+        """
+        Log metrics for multiple epochs at once (batch logging).
+        
+        This is useful for logging all training history at the end of training
+        or when you want to log accumulated metrics in batches.
+        
+        Args:
+            epochs: List of epoch numbers
+            train_losses: List of training losses
+            test_losses: List of test/validation losses  
+            train_accuracies: List of training accuracies
+            test_accuracies: List of test/validation accuracies
+            **kwargs: Additional metrics (should be lists of same length)
+        """
+        
+        if not (len(epochs) == len(train_losses) == len(test_losses) == 
+                len(train_accuracies) == len(test_accuracies)):
+            raise ValueError("All metric lists must have the same length")
+        
+        # Log each epoch's metrics
+        for i, epoch in enumerate(epochs):
+            metrics = {
+                'epoch': epoch,
+                'train_loss': train_losses[i],
+                'test_loss': test_losses[i],
+                'train_acc': train_accuracies[i],
+                'test_acc': test_accuracies[i],
+                'generalization_gap': train_accuracies[i] - test_accuracies[i]
+            }
+            
+            # Add any additional metrics
+            for key, values in kwargs.items():
+                if isinstance(values, (list, tuple)) and len(values) == len(epochs):
+                    metrics[key] = values[i]
+                else:
+                    # If not a list, use the same value for all epochs
+                    metrics[key] = values
+            
+            # Log to wandb
+            wandb.log(metrics, step=epoch)
+            
+            # Store in history (avoid duplicates)
+            if epoch not in self.metrics_history['epochs']:
+                self.metrics_history['epochs'].append(epoch)
+                self.metrics_history['train_loss'].append(train_losses[i])
+                self.metrics_history['test_loss'].append(test_losses[i])
+                self.metrics_history['train_acc'].append(train_accuracies[i])
+                self.metrics_history['test_acc'].append(test_accuracies[i])
+                self.metrics_history['generalization_gap'].append(train_accuracies[i] - test_accuracies[i])
+    
+    def log_grokking_curves(
+        self,
+        epochs: List[int],
+        train_losses: List[float],
+        test_losses: List[float],
+        train_accuracies: List[float],
+        test_accuracies: List[float],
+        grokking_epoch: Optional[int] = None,
+        **kwargs
+    ):
+        """
+        Log grokking training curves with visualization.
+        
+        This method provides backward compatibility and specialized grokking visualization.
+        
+        Args:
+            epochs: List of epoch numbers
+            train_losses: List of training losses
+            test_losses: List of test/validation losses
+            train_accuracies: List of training accuracies
+            test_accuracies: List of test/validation accuracies
+            grokking_epoch: Epoch when grokking occurred (if detected)
+            **kwargs: Additional metrics
+        """
+        
+        # First log all the metrics using the batch method
+        self.log_epochs_metrics(
+            epochs=epochs,
+            train_losses=train_losses,
+            test_losses=test_losses,
+            train_accuracies=train_accuracies,
+            test_accuracies=test_accuracies,
+            grokking_epoch_marker=[grokking_epoch] * len(epochs) if grokking_epoch else [None] * len(epochs),
+            **kwargs
+        )
+        
+        # Create and log grokking visualization
+        try:
+            fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+            fig.suptitle('Grokking Training Dynamics', fontsize=16)
+            
+            # Loss curves
+            axes[0, 0].plot(epochs, train_losses, label='Train Loss', color='blue', alpha=0.7)
+            axes[0, 0].plot(epochs, test_losses, label='Test Loss', color='red', alpha=0.7)
+            if grokking_epoch:
+                axes[0, 0].axvline(x=grokking_epoch, color='green', linestyle='--', 
+                                  label=f'Grokking (epoch {grokking_epoch})')
+            axes[0, 0].set_xlabel('Epoch')
+            axes[0, 0].set_ylabel('Loss')
+            axes[0, 0].set_title('Training and Test Loss')
+            axes[0, 0].legend()
+            axes[0, 0].grid(True, alpha=0.3)
+            
+            # Accuracy curves
+            axes[0, 1].plot(epochs, train_accuracies, label='Train Accuracy', color='blue', alpha=0.7)
+            axes[0, 1].plot(epochs, test_accuracies, label='Test Accuracy', color='red', alpha=0.7)
+            if grokking_epoch:
+                axes[0, 1].axvline(x=grokking_epoch, color='green', linestyle='--',
+                                  label=f'Grokking (epoch {grokking_epoch})')
+            axes[0, 1].set_xlabel('Epoch')
+            axes[0, 1].set_ylabel('Accuracy')
+            axes[0, 1].set_title('Training and Test Accuracy')
+            axes[0, 1].legend()
+            axes[0, 1].grid(True, alpha=0.3)
+            
+            # Generalization gap
+            gen_gap = [train_acc - test_acc for train_acc, test_acc in zip(train_accuracies, test_accuracies)]
+            axes[1, 0].plot(epochs, gen_gap, label='Generalization Gap', color='purple', alpha=0.7)
+            if grokking_epoch:
+                axes[1, 0].axvline(x=grokking_epoch, color='green', linestyle='--',
+                                  label=f'Grokking (epoch {grokking_epoch})')
+            axes[1, 0].set_xlabel('Epoch')
+            axes[1, 0].set_ylabel('Gap (Train - Test)')
+            axes[1, 0].set_title('Generalization Gap Over Time')
+            axes[1, 0].legend()
+            axes[1, 0].grid(True, alpha=0.3)
+            
+            # Phase diagram (test acc vs train acc)
+            scatter = axes[1, 1].scatter(train_accuracies, test_accuracies, c=epochs, 
+                                       cmap='viridis', alpha=0.6, s=20)
+            axes[1, 1].plot([0, 1], [0, 1], 'k--', alpha=0.5, label='Perfect Generalization')
+            if grokking_epoch and grokking_epoch < len(epochs):
+                grok_idx = epochs.index(grokking_epoch) if grokking_epoch in epochs else -1
+                if grok_idx >= 0:
+                    axes[1, 1].scatter(train_accuracies[grok_idx], test_accuracies[grok_idx],
+                                     color='red', s=100, marker='*', label=f'Grokking Point')
+            axes[1, 1].set_xlabel('Train Accuracy')
+            axes[1, 1].set_ylabel('Test Accuracy')
+            axes[1, 1].set_title('Generalization Phase Diagram')
+            axes[1, 1].legend()
+            axes[1, 1].grid(True, alpha=0.3)
+            plt.colorbar(scatter, ax=axes[1, 1], label='Epoch')
+            
+            plt.tight_layout()
+            
+            # Log to wandb
+            wandb.log({"grokking_curves": wandb.Image(fig)})
+            plt.close(fig)
+            
+        except Exception as e:
+            self.logger.warning(f"Could not create grokking visualization: {e}")
     
     def log_metrics(self, metrics: Dict[str, Any], step: Optional[int] = None):
         """
