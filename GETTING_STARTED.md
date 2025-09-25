@@ -521,6 +521,21 @@ python phenomena/simplicity_bias/celeba/training/train_celeba.py \
     --data_dir ./celeba_data --epochs 100
 ```
 
+### Colored MNIST (Simplicity Bias)
+
+Study color bias in digit classification:
+
+```bash
+# Generate colored MNIST with strong color-digit correlation
+python data/vision/colored_mnist/generate_colored_mnist.py \
+    --num_train_samples 10000 --num_test_samples 2000 \
+    --color_correlation 0.9 --output_dir ./colored_mnist_data
+
+# Train CNN model to study bias learning dynamics
+python phenomena/simplicity_bias/colored_mnist/train_colored_mnist.py \
+    --data_dir ./colored_mnist_data --epochs 200 --use_wandb
+```
+
 ### CIFAR-10-C (Robustness)
 
 Study clean vs corrupted image classification:
@@ -532,13 +547,35 @@ python data/vision/cifar10c/generate_synthetic_cifar10c.py \
     --test_corruptions fog brightness --output_dir ./cifar10c_data
 
 # Train CNN model
-python phenomena/robustness/cifar10c/training/train_cifar10c.py \
+python phenomena/robustness/cifar10c/train_cifar10c.py \
     --data_dir ./cifar10c_data --epochs 100
 ```
 
-### Sentiment Bias NLP (NEW)
+### CIFAR-100-C (Advanced Robustness)
 
-Study sentiment classification with topic bias:
+Study robustness with more classes and complexity:
+
+```bash
+# Train on CIFAR-100 with corruption robustness evaluation
+python phenomena/robustness/cifar100c/train_cifar100c.py \
+    --data_dir ./cifar100_data --epochs 200 --use_wandb \
+    --model_size medium --evaluate_corruptions
+```
+
+### Continual Learning (CIFAR-100 → 10 Tasks)
+
+Study catastrophic forgetting and delayed generalization across sequential tasks:
+
+```bash
+# Train continual learning on CIFAR-100 divided into 10 tasks
+python phenomena/continual_learning/cifar100_10tasks/train_continual_cifar100.py \
+    --data_dir ./cifar100_continual --num_tasks 10 --epochs_per_task 50 \
+    --memory_size 1000 --use_wandb
+```
+
+### Sentiment Bias NLP (Improved Difficulty)
+
+Study sentiment classification with topic bias (now more challenging):
 
 ```bash
 # Generate sentiment bias dataset (technology bias)
@@ -546,14 +583,106 @@ python data/nlp/sentiment/generate_sentiment_bias.py \
     --bias_topic technology --train_bias 0.9 --test_bias 0.1 \
     --train_size 5000 --test_size 1000 --output_dir ./sentiment_bias_data
 
-# Train sentiment classifier
+# Train sentiment classifier with configurable difficulty
 python phenomena/nlp/sentiment_bias/training/train_sentiment_bias.py \
-    --data_dir ./sentiment_bias_data --epochs 100 --use_wandb
+    --data_dir ./sentiment_bias_data --epochs 100 --use_wandb \
+    --embed_dim 64 --hidden_dim 128 --dropout 0.3 --learning_rate 5e-4
+
+# For even more challenging settings (smaller model, slower learning)
+python phenomena/nlp/sentiment_bias/training/train_sentiment_bias.py \
+    --data_dir ./sentiment_bias_data --epochs 200 --use_wandb \
+    --embed_dim 32 --hidden_dim 64 --dropout 0.5 --learning_rate 1e-4
 
 # Alternative bias topics
 python data/nlp/sentiment/generate_sentiment_bias.py \
     --bias_topic politics --neutral_topics sports entertainment science \
     --output_dir ./sentiment_politics_bias
+```
+
+## 🔍 Data Attribution and Analysis Methods
+
+### TRAK (Training Data Attribution)
+
+Understand which training examples most influence model predictions:
+
+```bash
+# Run TRAK analysis on a trained model
+python data_attribution/trak/run_trak_analysis.py \
+    --model_path ./results/trained_model.pth \
+    --data_dir ./dataset --target_examples ./test_samples \
+    --output_dir ./trak_results
+
+# Analyze TRAK scores and visualize influential examples
+python data_attribution/trak/analyze_trak_scores.py \
+    --trak_results ./trak_results --save_dir ./analysis_output
+```
+
+### GradCAM (Gradient-based Attribution)
+
+Visualize what parts of input the model focuses on:
+
+```bash
+# Generate GradCAM visualizations for image classification
+python data_attribution/gradcam/run_gradcam.py \
+    --model_path ./results/trained_model.pth \
+    --data_dir ./dataset --target_layer layer4 \
+    --output_dir ./gradcam_visualizations
+
+# Create comparison plots of attention across training phases
+python data_attribution/gradcam/compare_attention_phases.py \
+    --model_checkpoints ./checkpoints/ --data_dir ./dataset
+```
+
+### Post-Training Analysis
+
+Comprehensive analysis of training dynamics and delayed generalization patterns:
+
+```bash
+# Analyze bias evolution over training
+python visualization/bias_analysis.py \
+    --results_file ./results/training_history.json \
+    --save_dir ./bias_analysis
+
+# Detect phase transitions in training curves
+python utils/phase_transition_detector.py \
+    --metrics_file ./results/metrics.json \
+    --output_dir ./phase_analysis
+
+# Color bias analysis for vision tasks
+python utils/image_analysis.py \
+    --dataset_path ./data/vision/dataset \
+    --analysis_type color_bias --save_results ./color_analysis
+```
+
+### Example Analysis Workflow
+
+Complete analysis pipeline for understanding delayed generalization:
+
+```bash
+# 1. Train model with detailed logging
+python phenomena/simplicity_bias/colored_mnist/train_colored_mnist.py \
+    --data_dir ./colored_mnist --epochs 200 --save_checkpoints \
+    --checkpoint_interval 20 --use_wandb
+
+# 2. Run TRAK attribution analysis
+python data_attribution/trak/run_trak_analysis.py \
+    --model_path ./results/final_model.pth \
+    --data_dir ./colored_mnist --output_dir ./trak_colored_mnist
+
+# 3. Generate GradCAM visualizations
+python data_attribution/gradcam/run_gradcam.py \
+    --model_path ./results/final_model.pth \
+    --data_dir ./colored_mnist --output_dir ./gradcam_colored_mnist
+
+# 4. Analyze training dynamics and phase transitions
+python visualization/bias_analysis.py \
+    --results_file ./results/training_history.json \
+    --save_dir ./dynamics_analysis
+
+# 5. Create comprehensive report
+python utils/generate_analysis_report.py \
+    --experiment_dir ./results --trak_dir ./trak_colored_mnist \
+    --gradcam_dir ./gradcam_colored_mnist --output ./final_report.html
 ```
 
 ## 📊 Expected Phenomena
@@ -574,11 +703,30 @@ python data/nlp/sentiment/generate_sentiment_bias.py \
 - **Phase 3 (Epochs 60+)**: Potential delayed generalization to true attribute relationships
 - **Key Transition**: Watch for bias gap reduction indicating robust feature learning
 
-### Sentiment Bias NLP Timeline (NEW)
-- **Phase 1 (Epochs 0-30)**: Model learns topic-sentiment spurious correlations (e.g., technology → positive)
-- **Phase 2 (Epochs 30-70)**: High bias-conforming accuracy, poor bias-conflicting accuracy  
-- **Phase 3 (Epochs 70+)**: Potential delayed generalization to true sentiment patterns
+### Sentiment Bias NLP Timeline (Improved Difficulty)
+- **Phase 1 (Epochs 0-50)**: Model learns topic-sentiment spurious correlations (e.g., technology → positive)
+- **Phase 2 (Epochs 50-120)**: High bias-conforming accuracy, poor bias-conflicting accuracy  
+- **Phase 3 (Epochs 120+)**: Potential delayed generalization to true sentiment patterns
 - **Key Transition**: Watch for bias gap reduction indicating robust sentiment learning
+- **With Smaller Models**: Delayed generalization may occur much later (epochs 150-300+)
+
+### Colored MNIST Timeline
+- **Phase 1 (Epochs 0-30)**: Rapid learning of color-digit correlations
+- **Phase 2 (Epochs 30-100)**: High color-based accuracy, poor shape-based accuracy
+- **Phase 3 (Epochs 100+)**: Gradual shift to shape-based digit recognition
+- **Key Transition**: Color accuracy plateaus while shape accuracy increases
+
+### Continual Learning Timeline
+- **Task 1**: Normal learning curve, high accuracy achieved
+- **Task 2-5**: Catastrophic forgetting of previous tasks, new task learning
+- **Task 6+**: Potential delayed consolidation and improved retention
+- **Final Phases**: Possible emergence of meta-learning capabilities
+
+### CIFAR-100-C Robustness Timeline
+- **Clean CIFAR-100**: Slower convergence than CIFAR-10 due to more classes
+- **Corrupted Images**: Very poor initial performance, gradual improvement
+- **Class-specific Robustness**: Some classes robust earlier than others
+- **Late Training**: Potential emergence of corruption-invariant features
 
 ### Robustness Development
 - **Clean Images**: High accuracy achieved quickly
@@ -608,9 +756,23 @@ python data/nlp/sentiment/generate_sentiment_bias.py \
 - **Topic-sentiment correlation**: How much model relies on topic for sentiment prediction
 - **Cross-topic generalization**: Performance on sentiment classification across different topics
 
-### Robustness (CIFAR-10-C)
+### Robustness (CIFAR-10-C, CIFAR-100-C)
 - **Clean vs corrupted accuracy gap**: Robustness measure
 - **Corruption-specific performance**: Per-corruption type accuracy
+- **Robustness progression**: How corruption resistance develops over training
+
+### Continual Learning (CIFAR-100 → 10 Tasks)
+- **Average accuracy**: Performance across all learned tasks
+- **Forgetting measure**: Accuracy drop on previous tasks when learning new ones
+- **Forward transfer**: How well previous learning helps with new tasks
+- **Backward transfer**: How new learning affects previous task performance
+- **Task-specific accuracy**: Individual performance on each of the 10 tasks
+
+### Colored MNIST (Simplicity Bias)
+- **Shape accuracy**: Performance based on digit shape (robust feature)
+- **Color accuracy**: Performance based on digit color (spurious feature)
+- **Color-shape correlation**: Strength of spurious correlation in predictions
+- **Robust generalization**: Performance on color-conflicting test examples
 
 ## 🌊 Phase Transition Detection
 

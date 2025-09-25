@@ -421,10 +421,17 @@ def main():
                        help="Path to dataset directory")
     parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
-    parser.add_argument("--learning_rate", type=float, default=1e-3, help="Learning rate")
+    parser.add_argument("--learning_rate", type=float, default=5e-4, 
+                       help="Learning rate (default: 5e-4, lower = slower learning)")
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--model_type", type=str, choices=['simple', 'transformer'], 
                        default='simple', help="Type of model to use")
+    parser.add_argument("--embed_dim", type=int, default=64, 
+                       help="Embedding dimension (default: 64, smaller = harder)")
+    parser.add_argument("--hidden_dim", type=int, default=128, 
+                       help="Hidden dimension (default: 128, smaller = harder)")
+    parser.add_argument("--dropout", type=float, default=0.3, 
+                       help="Dropout rate (default: 0.3, higher = harder)")
     parser.add_argument("--save_dir", type=str, default="./sentiment_bias_results", 
                        help="Directory to save results")
     parser.add_argument("--results_dir", type=str, default=None, 
@@ -460,6 +467,9 @@ def main():
     print(f"Data fraction: {args.data_fraction:.2%}")
     print(f"Device: {device}")
     print(f"Model type: {args.model_type}")
+    print(f"Embed dim: {args.embed_dim}")
+    print(f"Hidden dim: {args.hidden_dim}")
+    print(f"Dropout: {args.dropout}")
     print(f"Epochs: {args.epochs}")
     print(f"Batch size: {args.batch_size}")
     print(f"Learning rate: {args.learning_rate}")
@@ -488,13 +498,14 @@ def main():
     full_save_dir = os.path.join(args.save_dir, experiment_name)
     os.makedirs(full_save_dir, exist_ok=True)
     
-    # Create model
+    # Create model (configurable complexity to control difficulty)
     model = create_sentiment_model(
         model_type=args.model_type,
-        vocab_size=10000,  # Would need proper vocab size calculation
-        embed_dim=128,
-        hidden_dim=256,
-        num_classes=2
+        vocab_size=5000,  # Fixed smaller vocab to increase difficulty
+        embed_dim=args.embed_dim,
+        hidden_dim=args.hidden_dim,
+        num_classes=2,
+        dropout=args.dropout
     )
     
     # Create trainer
