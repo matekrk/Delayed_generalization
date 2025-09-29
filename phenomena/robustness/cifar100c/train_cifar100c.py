@@ -106,7 +106,7 @@ class CIFAR100CTrainer:
             total += target.size(0)
         
         avg_loss = total_loss / len(self.train_loader)
-        accuracy = 100. * correct / total
+        accuracy = correct / total
         
         self.train_losses.append(avg_loss)
         self.train_accuracies.append(accuracy)
@@ -133,7 +133,7 @@ class CIFAR100CTrainer:
                 total += target.size(0)
         
         avg_loss = test_loss / len(test_loader)
-        accuracy = 100. * correct / total
+        accuracy = correct / total
         
         return avg_loss, accuracy
     
@@ -217,13 +217,13 @@ class CIFAR100CTrainer:
             # Logging
             if (epoch + 1) % log_interval == 0:
                 print(f'Epoch {epoch+1}/{epochs}:')
-                print(f'  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%')
-                print(f'  Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}%')
+                print(f'  Train Loss: {train_loss:.4f}, Train Acc: {train_acc*100:.2f}%')
+                print(f'  Test Loss: {test_loss:.4f}, Test Acc: {test_acc*100:.2f}%')
                 print(f'  LR: {self.scheduler.get_last_lr()[0]:.6f}')
                 
                 if corruption_results:
-                    print(f'  Mean Corruption Acc: {robustness_metrics.get("mean_corruption_acc", 0):.2f}%')
-                    print(f'  Robustness Gap: {robustness_metrics.get("robustness_gap", 0):.2f}%')
+                    print(f'  Mean Corruption Acc: {robustness_metrics.get("mean_corruption_acc", 0)*100:.2f}%')
+                    print(f'  Robustness Gap: {robustness_metrics.get("robustness_gap", 0)*100:.2f}%')
             
             # WandB logging
             if self.wandb_logger:
@@ -485,12 +485,12 @@ def main():
     print("\n" + "="*60)
     print("EXPERIMENT COMPLETED")
     print("="*60)
-    print(f"Final Test Accuracy: {results['final_test_acc']:.2f}%")
-    print(f"Best Test Accuracy: {results['best_test_acc']:.2f}%")
+    print(f"Final Test Accuracy: {results['final_test_acc']*100:.2f}%")
+    print(f"Best Test Accuracy: {results['best_test_acc']*100:.2f}%")
     
     if results['final_robustness_metrics']:
-        print(f"Mean Corruption Accuracy: {results['final_robustness_metrics'].get('mean_corruption_acc', 0):.2f}%")
-        print(f"Robustness Gap: {results['final_robustness_metrics'].get('robustness_gap', 0):.2f}%")
+        print(f"Mean Corruption Accuracy: {results['final_robustness_metrics'].get('mean_corruption_acc', 0)*100:.2f}%")
+        print(f"Robustness Gap: {results['final_robustness_metrics'].get('robustness_gap', 0)*100:.2f}%")
     
     print(f"Results saved to: {args.save_dir}")
     

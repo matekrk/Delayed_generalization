@@ -193,7 +193,7 @@ class RealCelebATrainer:
             total += labels.size(0)
         
         avg_loss = total_loss / len(self.train_loader)
-        accuracy = 100. * correct / total
+        accuracy = correct / total
         
         return avg_loss, accuracy
     
@@ -261,10 +261,10 @@ class RealCelebATrainer:
                         attr2_total[attr2_key] += 1
         
         avg_loss = total_loss / len(loader)
-        accuracy = 100. * correct / total
+        accuracy = correct / total
         
-        bias_conforming_acc = 100. * bias_conforming_correct / bias_conforming_total if bias_conforming_total > 0 else 0
-        bias_conflicting_acc = 100. * bias_conflicting_correct / bias_conflicting_total if bias_conflicting_total > 0 else 0
+        bias_conforming_acc = bias_conforming_correct / bias_conforming_total if bias_conforming_total > 0 else 0
+        bias_conflicting_acc = bias_conflicting_correct / bias_conflicting_total if bias_conflicting_total > 0 else 0
         
         # Calculate attribute-specific accuracies
         attr_accuracies = {}
@@ -338,25 +338,25 @@ class RealCelebATrainer:
             
             # Logging
             if epoch % log_interval == 0 or epoch == epochs - 1:
-                print(f"Epoch {epoch:3d}: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
-                      f"Test Acc: {test_results['accuracy']:.2f}%, "
-                      f"Bias Conform: {test_results['bias_conforming_acc']:.2f}%, "
-                      f"Bias Conflict: {test_results['bias_conflicting_acc']:.2f}%")
+                print(f"Epoch {epoch:3d}: Train Loss: {train_loss:.4f}, Train Acc: {train_acc*100:.2f}%, "
+                      f"Test Acc: {test_results['accuracy']*100:.2f}%, "
+                      f"Bias Conform: {test_results['bias_conforming_acc']*100:.2f}%, "
+                      f"Bias Conflict: {test_results['bias_conflicting_acc']*100:.2f}%")
         
-        print(f"\nBest test accuracy: {best_test_acc:.2f}% at epoch {best_epoch}")
+        print(f"\nBest test accuracy: {best_test_acc*100:.2f}% at epoch {best_epoch}")
         
         # Final evaluation with detailed analysis
         print("\nFinal detailed evaluation:")
         train_final = self.evaluate(self.train_loader, "Train")
         test_final = self.evaluate(self.test_loader, "Test")
         
-        print(f"Train - Bias conforming: {train_final['bias_conforming_acc']:.2f}% "
+        print(f"Train - Bias conforming: {train_final['bias_conforming_acc']*100:.2f}% "
               f"({train_final['bias_conforming_total']} samples)")
-        print(f"Train - Bias conflicting: {train_final['bias_conflicting_acc']:.2f}% "
+        print(f"Train - Bias conflicting: {train_final['bias_conflicting_acc']*100:.2f}% "
               f"({train_final['bias_conflicting_total']} samples)")
-        print(f"Test - Bias conforming: {test_final['bias_conforming_acc']:.2f}% "
+        print(f"Test - Bias conforming: {test_final['bias_conforming_acc']*100:.2f}% "
               f"({test_final['bias_conforming_total']} samples)")
-        print(f"Test - Bias conflicting: {test_final['bias_conflicting_acc']:.2f}% "
+        print(f"Test - Bias conflicting: {test_final['bias_conflicting_acc']*100:.2f}% "
               f"({test_final['bias_conflicting_total']} samples)")
         
         # Save final results
@@ -563,8 +563,8 @@ def main():
     
     print(f"\nTraining completed!")
     print(f"Results saved to: {args.save_dir}")
-    print(f"Best test accuracy: {results['best_test_acc']:.2f}%")
-    print(f"Final bias gap: {results['final_bias_conforming_acc'] - results['final_bias_conflicting_acc']:.2f}%")
+    print(f"Best test accuracy: {results['best_test_acc']*100:.2f}%")
+    print(f"Final bias gap: {(results['final_bias_conforming_acc'] - results['final_bias_conflicting_acc'])*100:.2f}%")
     
     # Save metadata with results
     final_metadata = {

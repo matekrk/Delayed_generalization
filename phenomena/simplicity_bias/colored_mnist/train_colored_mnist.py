@@ -249,7 +249,7 @@ class SimplicityBiasTrainer:
             if shape_acc > color_acc and shape_acc > best_shape_acc and shape_learning_epoch is None:
                 shape_learning_epoch = epoch
                 print(f"\n🎯 SHAPE LEARNING DETECTED AT EPOCH {epoch}!")
-                print(f"   Shape accuracy ({shape_acc:.3f}) > Color accuracy ({color_acc:.3f})")
+                print(f"   Shape accuracy ({shape_acc*100:.2f}%) > Color accuracy ({color_acc*100:.2f}%)")
             
             best_shape_acc = max(best_shape_acc, shape_acc)
             
@@ -258,11 +258,11 @@ class SimplicityBiasTrainer:
                 elapsed = time.time() - start_time
                 print(f"Epoch {epoch:4d} | "
                       f"Train Loss: {train_loss:.4f} | "
-                      f"Train Acc: {train_acc:.3f} | "
+                      f"Train Acc: {train_acc*100:.2f}% | "
                       f"Test Loss: {test_loss:.4f} | "
-                      f"Test Acc: {test_acc:.3f} | "
-                      f"Color Acc: {color_acc:.3f} | "
-                      f"Shape Acc: {shape_acc:.3f} | "
+                      f"Test Acc: {test_acc*100:.2f}% | "
+                      f"Color Acc: {color_acc*100:.2f}% | "
+                      f"Shape Acc: {shape_acc*100:.2f}% | "
                       f"Time: {elapsed:.2f}s")
                 
                 # Store metrics
@@ -461,10 +461,10 @@ def main():
     print("SIMPLICITY BIAS EXPERIMENT COMPLETED")
     print("="*70)
     print(f"Shape learning epoch: {results['shape_learning_epoch']}")
-    print(f"Final test accuracy: {results['final_test_acc']:.3f}")
-    print(f"Final color accuracy: {results['final_color_acc']:.3f}")
-    print(f"Final shape accuracy: {results['final_shape_acc']:.3f}")
-    print(f"Best shape accuracy: {results['best_shape_acc']:.3f}")
+    print(f"Final test accuracy: {results['final_test_acc']*100:.2f}%")
+    print(f"Final color accuracy: {results['final_color_acc']*100:.2f}%")
+    print(f"Final shape accuracy: {results['final_shape_acc']*100:.2f}%")
+    print(f"Best shape accuracy: {results['best_shape_acc']*100:.2f}%")
     print(f"Results saved to: {args.save_dir}")
     print("="*70)
 

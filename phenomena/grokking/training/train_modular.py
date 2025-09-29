@@ -199,7 +199,7 @@ class GrokkingTrainer:
             if test_acc > best_test_acc + 0.1 and test_acc > 0.8 and grokking_epoch is None:
                 grokking_epoch = epoch
                 print(f"\n🎯 GROKKING DETECTED AT EPOCH {epoch}!")
-                print(f"   Test accuracy jumped to {test_acc:.3f}")
+                print(f"   Test accuracy jumped to {test_acc*100:.2f}%")
             
             best_test_acc = max(best_test_acc, test_acc)
             
@@ -208,9 +208,9 @@ class GrokkingTrainer:
                 elapsed = time.time() - start_time
                 print(f"Epoch {epoch:4d} | "
                       f"Train Loss: {train_loss:.4f} | "
-                      f"Train Acc: {train_acc:.3f} | "
+                      f"Train Acc: {train_acc*100:.2f}% | "
                       f"Test Loss: {test_loss:.4f} | "
-                      f"Test Acc: {test_acc:.3f} | "
+                      f"Test Acc: {test_acc*100:.2f}% | "
                       f"Time: {elapsed:.2f}s")
                 
                 # Store metrics
@@ -519,9 +519,9 @@ def main():
     print("GROKKING EXPERIMENT COMPLETED")
     print("="*60)
     print(f"Grokking epoch: {results['grokking_epoch']}")
-    print(f"Final train accuracy: {results['final_train_acc']:.3f}")
-    print(f"Final test accuracy: {results['final_test_acc']:.3f}")
-    print(f"Best test accuracy: {results['best_test_acc']:.3f}")
+    print(f"Final train accuracy: {results['final_train_acc']*100:.2f}%")
+    print(f"Final test accuracy: {results['final_test_acc']*100:.2f}%")
+    print(f"Best test accuracy: {results['best_test_acc']*100:.2f}%")
     print(f"Results saved to: {save_dir}")
     if wandb_logger:
         print(f"Wandb run: {wandb_logger.run.url}")
