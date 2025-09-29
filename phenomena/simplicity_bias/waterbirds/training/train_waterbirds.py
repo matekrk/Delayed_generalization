@@ -30,6 +30,9 @@ import time
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
+from utils.wandb_integration.delayed_generalization_logger import DelayedGeneralizationLogger
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+
 from data.generate_synthetic_waterbirds import load_synthetic_waterbirds_dataset
 
 
@@ -99,13 +102,15 @@ class WaterbirdsTrainer:
         method: str = "erm",
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
-        group_dro_step_size: float = 0.01
+        group_dro_step_size: float = 0.01,
+        wandb_logger: Optional[object] = None
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.device = device
         self.method = method
+        self.wandb_logger = wandb_logger
         
         # Setup optimizer using enhanced optimizers
         try:
@@ -436,6 +441,9 @@ def main():
     parser.add_argument("--data_fraction", type=float, default=1.0, 
                        help="Fraction of dataset to use (0.0-1.0, default: 1.0 for full dataset)")
     parser.add_argument("--use_wandb", action="store_true", help="Enable wandb logging")
+    parser.add_argument("--wandb_project", type=str, default="delayed-generalization-waterbirds", help="WandB project name")
+    parser.add_argument("--wandb_name", type=str, default=None, help="WandB run name")
+    parser.add_argument("--wandb_tags", type=str, nargs='*', default=None, help="WandB tags")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     
     args = parser.parse_args()
@@ -450,6 +458,31 @@ def main():
     # Set random seeds
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
+    
+    # Setup wandb logger if requested
+    wandb_logger = None
+    if args.use_wandb:
+        config = {
+            'method': args.method,
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'learning_rate': args.learning_rate,
+            'weight_decay': args.weight_decay,
+            'group_dro_step_size': args.group_dro_step_size,
+            'data_fraction': args.data_fraction,
+            'seed': args.seed
+        }
+        
+        experiment_name = args.wandb_name or f"waterbirds_{args.method}_{args.seed}"
+        wandb_logger = DelayedGeneralizationLogger(
+            project_name=args.wandb_project,
+            experiment_name=experiment_name,
+            config=config,
+            phenomenon_type='simplicity_bias',
+            tags=(args.wandb_tags or []) + ['waterbirds', 'simplicity_bias', args.method],
+            notes="Waterbirds simplicity bias experiment studying delayed generalization patterns"
+        )
+        print(f"WandB logging enabled: {args.wandb_project}/{wandb_logger.run.name}")
     
     print("Waterbirds Simplicity Bias Training")
     print("=" * 40)
@@ -483,7 +516,8 @@ def main():
         method=args.method,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        group_dro_step_size=args.group_dro_step_size
+        group_dro_step_size=args.group_dro_step_size,
+        wandb_logger=wandb_logger
     )
     
     # Train model
@@ -493,6 +527,16 @@ def main():
     print(f"\nTraining completed!")
     print(f"Results saved to: {args.save_dir}")
     print(f"Best worst group accuracy: {results['best_worst_group_acc']:.2f}%")
+    
+    # Final wandb logging
+    if wandb_logger:
+        final_metrics = {
+            'best_worst_group_acc': results['best_worst_group_acc'],
+            'final_test_acc': results.get('final_test_acc', 0),
+            'best_test_acc': results.get('best_test_acc', 0)
+        }
+        wandb_logger.save_experiment_summary(final_metrics)
+        wandb_logger.finish()
 
 
 if __name__ == "__main__":
