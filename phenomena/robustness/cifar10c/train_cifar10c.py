@@ -318,8 +318,82 @@ class CIFAR10CTrainer:
 
 
 def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader, DataLoader, Dict[str, DataLoader]]:
-    """Create data loaders from saved dataset"""
-    # Load dataset
+    """Create data loaders from saved dataset including individual corruption loaders"""
+    
+    def load_individual_corruption_loaders(base_dir: str, batch_size: int) -> Dict[str, DataLoader]:
+        """Load individual corruption datasets as separate data loaders"""
+        corruption_loaders = {}
+        data_path = Path(base_dir)
+        
+        # Look for cifar10c subdirectory
+        cifar10c_path = data_path / "cifar10c"
+        if not cifar10c_path.exists():
+            print(f"Warning: cifar10c subdirectory not found in {base_dir}")
+            return corruption_loaders
+        
+        # Load metadata to get corruption types
+        metadata_path = cifar10c_path / "metadata.json"
+        if metadata_path.exists():
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+            corruption_types = metadata.get('corruption_types', [])
+            severity = metadata.get('severity', 3)
+            
+            for corruption_type in corruption_types:
+                severity_str = f"severity_{severity}"
+                subdir = f"{corruption_type}_{severity_str}"
+                corruption_subdir = cifar10c_path / subdir
+                
+                test_dataset_path = corruption_subdir / "test_dataset.pt"
+                if test_dataset_path.exists():
+                    try:
+                        # Load the individual corruption dataset
+                        test_dataset = torch.load(test_dataset_path)
+                        
+                        # Convert to tensors if it's a CIFAR10CDataset
+                        if hasattr(test_dataset, '__len__') and hasattr(test_dataset, '__getitem__'):
+                            images_list = []
+                            labels_list = []
+                            corruption_list = []
+                            
+                            # Sample to determine structure (use subset for efficiency)
+                            sample_size = min(100, len(test_dataset))
+                            for i in range(sample_size):
+                                sample = test_dataset[i]
+                                if isinstance(sample, (tuple, list)) and len(sample) >= 2:
+                                    img, lbl = sample[0], sample[1]
+                                    corr = sample[2] if len(sample) > 2 else corruption_type
+                                    images_list.append(img)
+                                    labels_list.append(lbl)
+                                    corruption_list.append(corr)
+                            
+                            if images_list:
+                                # Create a simple tensor dataset for now
+                                images = torch.stack([torch.as_tensor(img) for img in images_list])
+                                labels = torch.tensor(labels_list)
+                                corruptions = torch.tensor([0] * len(labels_list))  # Simplified
+                                
+                                # Apply normalization
+                                cifar10_mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+                                cifar10_std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+                                
+                                if images.max() > 1.0:
+                                    images = images / 255.0
+                                images = (images - cifar10_mean) / cifar10_std
+                                
+                                corruption_dataset = TensorDataset(images.float(), labels, corruptions)
+                                corruption_loaders[corruption_type] = DataLoader(
+                                    corruption_dataset,
+                                    batch_size=batch_size,
+                                    shuffle=False
+                                )
+                                print(f"Loaded corruption dataset: {corruption_type} with {len(corruption_dataset)} samples")
+                    except Exception as e:
+                        print(f"Warning: Failed to load corruption dataset {corruption_type}: {e}")
+        
+        return corruption_loaders
+    
+    # Load main dataset (keeping existing logic)
     train_dataset, test_dataset, metadata = load_cifar10c_dataset(data_dir)
     
     # Convert to tensors
@@ -421,13 +495,14 @@ def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader
         shuffle=False
     )
     
-    # Create corruption loaders (empty for now - will be implemented based on metadata)
-    corruption_loaders = {}
-    if hasattr(metadata, 'corruption_types') or 'corruption_types' in metadata:
+    # Create individual corruption loaders
+    corruption_loaders = load_individual_corruption_loaders(data_dir, batch_size)
+    
+    # Fallback: if no individual corruption loaders found, use main test loader as placeholder
+    if not corruption_loaders and hasattr(metadata, 'corruption_types') or 'corruption_types' in metadata:
         corruption_types = metadata.get('corruption_types', []) if isinstance(metadata, dict) else getattr(metadata, 'corruption_types', [])
-        # For now, return empty loaders - this will be enhanced to load individual corruption datasets
         for corruption_type in corruption_types:
-            corruption_loaders[corruption_type] = test_loader  # Placeholder
+            corruption_loaders[corruption_type] = test_loader  # Placeholder fallback
     
     return train_loader, test_loader, corruption_loaders
 
