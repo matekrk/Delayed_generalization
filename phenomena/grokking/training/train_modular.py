@@ -429,7 +429,12 @@ def main():
             
             # Generate run name if not provided
             if not args.wandb_name:
-                data_spec = args.data_dir.split('/')[-1]
+                try:
+                    data_spec = Path(args.data_dir).name
+                    if not data_spec:
+                        data_spec = Path(args.data_dir.rstrip('/\\')).name
+                except Exception:
+                    data_spec = args.data_dir.replace('\\', '/').rstrip('/').split('/')[-1] or 'dataset'
                 args.wandb_name = f"grokking_{data_spec}_{args.data_fraction}_d{args.d_model}_wd{args.weight_decay}_lr{args.learning_rate}"
 
             # Setup wandb logger
