@@ -408,16 +408,20 @@ def main():
         test_size=args.test_size,
         seed=args.seed
     )
-    
+
+    output_dir = Path(args.output_dir)
+    output_dir = output_dir / f"{args.bias_topic}_bias_{int(args.train_bias*100)}_train_{args.train_size}_testbias_{int(args.test_bias*100)}_test_{args.test_size}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     # Save datasets
-    save_dataset(train_dataset, os.path.join(args.output_dir, "train_dataset.pt"))
-    save_dataset(test_dataset, os.path.join(args.output_dir, "test_dataset.pt"))
+    save_dataset(train_dataset, os.path.join(output_dir, "train_dataset.pt"))
+    save_dataset(test_dataset, os.path.join(output_dir, "test_dataset.pt"))
     
     # Save metadata
-    with open(os.path.join(args.output_dir, "metadata.json"), "w") as f:
+    with open(os.path.join(output_dir, "metadata.json"), "w") as f:
         json.dump(metadata, f, indent=2)
     
-    print(f"Dataset saved to {args.output_dir}")
+    print(f"Dataset saved to {output_dir}")
     
     # Print dataset statistics
     train_positive = sum(train_dataset.sentiments)
