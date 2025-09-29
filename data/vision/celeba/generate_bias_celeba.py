@@ -91,9 +91,13 @@ class BiasedRealCelebADataset(Dataset):
         print(f"Original {self.attr1_name}=1 & {self.attr2_name}=1 correlation: {pos_attr2_corr:.3f}")
         print(f"Original {self.attr1_name}=0 & {self.attr2_name}=1 correlation: {neg_attr2_corr:.3f}")
         
-        # Create biased subset
+        # Create biased subset using more balanced approach
         self.biased_indices = []
         self.bias_followed = []
+        
+        # Separate samples by bias following/conflicting
+        bias_following_indices = []
+        bias_conflicting_indices = []
         
         for i, idx in enumerate(self.indices):
             label = labels[i].item()
@@ -105,17 +109,37 @@ class BiasedRealCelebADataset(Dataset):
             else:  # Negative label
                 follows_bias = (attr2_val == 0)
             
-            # Include sample based on bias strength
             if follows_bias:
-                # Always include bias-following samples up to bias_strength
-                if np.random.random() < self.bias_strength:
-                    self.biased_indices.append(idx)
-                    self.bias_followed.append(True)
+                bias_following_indices.append(idx)
             else:
-                # Include bias-violating samples up to (1 - bias_strength)
-                if np.random.random() < (1 - self.bias_strength):
-                    self.biased_indices.append(idx)
-                    self.bias_followed.append(False)
+                bias_conflicting_indices.append(idx)
+        
+        print(f"Available bias following samples: {len(bias_following_indices)}")
+        print(f"Available bias conflicting samples: {len(bias_conflicting_indices)}")
+        
+        # Calculate target numbers based on bias strength
+        total_target = min(len(self.indices), 1000)  # Reasonable target size
+        target_bias_following = int(total_target * self.bias_strength)
+        target_bias_conflicting = total_target - target_bias_following
+        
+        # Sample bias following samples
+        num_bias_following = min(target_bias_following, len(bias_following_indices))
+        np.random.shuffle(bias_following_indices)
+        selected_bias_following = bias_following_indices[:num_bias_following]
+        
+        # Sample bias conflicting samples 
+        num_bias_conflicting = min(target_bias_conflicting, len(bias_conflicting_indices))
+        np.random.shuffle(bias_conflicting_indices)
+        selected_bias_conflicting = bias_conflicting_indices[:num_bias_conflicting]
+        
+        # Combine samples
+        for idx in selected_bias_following:
+            self.biased_indices.append(idx)
+            self.bias_followed.append(True)
+            
+        for idx in selected_bias_conflicting:
+            self.biased_indices.append(idx)
+            self.bias_followed.append(False)
         
         print(f"Selected {len(self.biased_indices)} samples from {len(self.indices)} available")
         
