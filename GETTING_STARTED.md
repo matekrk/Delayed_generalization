@@ -68,7 +68,7 @@ Let's start with a classic delayed generalization experiment: studying simplicit
 # Core framework imports
 from models.vision import create_model_for_phenomenon, ModelFactory
 from utils.wandb_integration.delayed_generalization_logger import DelayedGeneralizationLogger
-from phenomena.simplicity_bias.colored_mnist.train_colored_mnist import ColoredMNISTTrainer
+from phenomena.simplicity_bias.colored_mnist.train_colored_mnist import SimplicityBiasTrainer
 from phenomena.simplicity_bias.colored_mnist.data.generate_colored_mnist import create_colored_mnist_dataset
 
 # Standard imports
@@ -169,7 +169,7 @@ print(f"  Test batches: {len(test_loader)}")
 
 ```python
 # Create trainer with bias analysis capabilities
-trainer = ColoredMNISTTrainer(
+trainer = SimplicityBiasTrainer(
     model=model,
     train_loader=train_loader,
     test_loader=test_loader,
@@ -528,12 +528,14 @@ Study color bias in digit classification:
 ```bash
 # Generate colored MNIST with strong color-digit correlation
 python data/vision/colored_mnist/generate_colored_mnist.py \
-    --num_train_samples 10000 --num_test_samples 2000 \
-    --color_correlation 0.9 --output_dir ./colored_mnist_data
+    --train_correlation 0.9 --test_correlation 0.1 \
+    --output_dir ./colored_mnist_data
 
-# Train CNN model to study bias learning dynamics
+# Train CNN model to study bias learning dynamics with wandb logging
 python phenomena/simplicity_bias/colored_mnist/train_colored_mnist.py \
-    --data_dir ./colored_mnist_data --epochs 200 --use_wandb
+    --data_dir ./colored_mnist_data --epochs 200 --use_wandb \
+    --wandb_project "my-simplicity-bias-project" \
+    --wandb_tags "experiment1" "colored_mnist"
 ```
 
 ### CIFAR-10-C (Robustness)
