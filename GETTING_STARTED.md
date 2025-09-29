@@ -320,7 +320,7 @@ print("Will learn 10 tasks sequentially with 10 classes each")
 
 ## 🛠️ Advanced Features
 
-### 1. Enhanced WandB Analysis
+### 1. Advanced WandB Analysis
 
 ```python
 # Advanced metrics tracking
@@ -963,17 +963,17 @@ python phenomena/nlp/sentiment_bias/training/train_sentiment_bias.py \
     --data_dir ./sentiment_data --data_fraction 1.0
 ```
 
-### Enhanced Optimizer Usage
-All scripts automatically use enhanced optimizers with phenomenon-specific defaults:
+### Advanced Optimizer Usage
+All scripts automatically use advanced optimizers with phenomenon-specific defaults:
 
 ```bash
-# Grokking: Uses EnhancedAdamW with high weight decay and gradient clipping
+# Grokking: Uses AdamW with high weight decay and gradient clipping
 python phenomena/grokking/training/train_modular.py --data_dir ./data
 
-# Simplicity Bias: Uses EnhancedAdamW with adaptive weight decay
+# Simplicity Bias: Uses AdamW with adaptive weight decay
 python phenomena/simplicity_bias/*/training/train_*.py --data_dir ./data
 
-# Robustness: Uses EnhancedSGD with adaptive momentum
+# Robustness: Uses SGD with adaptive momentum
 python phenomena/robustness/*/train_*.py --data_dir ./data
 ```
 

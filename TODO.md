@@ -1,6 +1,6 @@
 # TODO Items for Future Development
 
-This document lists complex issues and features that require future attention beyond the scope of the current enhancements.
+This document lists complex issues and features that require future attention.
 
 ## High Priority
 
