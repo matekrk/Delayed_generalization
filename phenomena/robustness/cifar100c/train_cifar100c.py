@@ -36,7 +36,7 @@ except ImportError:
     print("Warning: WandB integration not available")
     WANDB_AVAILABLE = False
 
-from models.vision.cifar_robustness_models import CIFAR100CModel
+from models.vision.cifar_robustness_models import CIFARModel, create_cifar_robustness_model
 
 
 class CIFAR100CTrainer:
@@ -431,7 +431,12 @@ def main():
     
     # Create model
     print(f"Creating {args.model_size} CIFAR-100-C model...")
-    model = CIFAR100CModel(num_classes=100, model_size=args.model_size)
+    model = create_cifar_robustness_model(
+        model_type='cifar100c',
+        num_classes=100,
+        model_size=args.model_size
+    )
+    print(f"Model created with {model.get_num_parameters():,} parameters")
     
     # Setup WandB if requested
     wandb_logger = None

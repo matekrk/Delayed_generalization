@@ -30,7 +30,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from data.vision.cifar10c.generate_cifar10c import load_cifar10c_dataset
 from data.vision.cifar10c.generate_cifar10c import CIFAR10CDataset
 from visualization.training_curves import TrainingCurvePlotter
-from models.vision.cifar_robustness_models import CIFAR10CModel
+from models.vision.cifar_robustness_models import CIFARModel, create_cifar_robustness_model
 
 
 class CIFAR10CTrainer:
@@ -51,7 +51,7 @@ class CIFAR10CTrainer:
         self.device = device
         
         # Setup optimizer and loss
-        self.optimizer = optim.Adam(
+        self.optimizer = optim.AdamW(
             model.parameters(),
             lr=learning_rate,
             weight_decay=weight_decay
@@ -320,6 +320,12 @@ def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader
     
     print(f"Data normalization applied - Train images shape: {train_images.shape}")
     print(f"Train images range: [{train_images.min():.3f}, {train_images.max():.3f}]")
+
+    train_images = train_images.float()
+    test_images = test_images.float()
+
+    print(f"Train images shape: {train_images.shape}, dtype: {train_images.dtype}")
+    print(f"Test images shape: {test_images.shape}, dtype: {test_images.dtype}")
     
     # Create data loaders
     train_loader = DataLoader(
@@ -340,6 +346,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader
 def main():
     parser = argparse.ArgumentParser(description="Train model on synthetic CIFAR-10-C dataset")
     parser.add_argument("--data_dir", type=str, required=True, help="Path to dataset directory")
+    parser.add_argument("--model_size", type=str, default="small", choices=['very_small', 'small', 'medium', 'large'],
+                        help="Model size to use")
     parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--learning_rate", type=float, default=1e-4, 
@@ -377,8 +385,9 @@ def main():
     print(f"Test batches: {len(test_loader)}")
     
     # Create model
-    model = CIFAR10CModel(num_classes=10, input_size=32)
-    
+    model = create_cifar_robustness_model(model_type='cifar10c', num_classes=10, model_size='small')
+    print(f"Model created with {model.get_num_parameters():,} parameters")
+
     # Create trainer
     trainer = CIFAR10CTrainer(
         model=model,
