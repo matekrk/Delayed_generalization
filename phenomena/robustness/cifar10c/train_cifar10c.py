@@ -26,6 +26,13 @@ from typing import Dict, Tuple, List, Optional
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
+try:
+    from utils.wandb_integration.delayed_generalization_logger import DelayedGeneralizationLogger
+    WANDB_AVAILABLE = True
+except ImportError:
+    print("Warning: WandB integration not available")
+    WANDB_AVAILABLE = False
+
 # from data.vision.cifar10c.generate_synthetic_cifar10c import load_synthetic_cifar10c_dataset
 from data.vision.cifar10c.generate_cifar10c import load_cifar10c_dataset
 from data.vision.cifar10c.generate_cifar10c import CIFAR10CDataset
@@ -43,12 +50,16 @@ class CIFAR10CTrainer:
         test_loader: DataLoader,
         device: torch.device,
         learning_rate: float = 1e-3,
-        weight_decay: float = 1e-4
+        weight_decay: float = 1e-4,
+        corruption_test_loaders: Optional[Dict[str, DataLoader]] = None,
+        wandb_logger: Optional[object] = None
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.device = device
+        self.corruption_test_loaders = corruption_test_loaders or {}
+        self.wandb_logger = wandb_logger
         
         # Setup optimizer and loss
         self.optimizer = optim.AdamW(
@@ -65,6 +76,11 @@ class CIFAR10CTrainer:
         self.test_accuracies = []
         self.clean_accuracies = []
         self.corrupted_accuracies = []
+        self.corruption_accuracies = {}
+        
+        # Initialize corruption tracking for individual corruption types
+        for corruption_name in self.corruption_test_loaders.keys():
+            self.corruption_accuracies[corruption_name] = []
         
     def train_epoch(self):
         """Train for one epoch"""
@@ -139,6 +155,30 @@ class CIFAR10CTrainer:
         
         return avg_loss, accuracy, clean_acc, corrupted_acc
     
+    def evaluate_corruptions(self) -> Dict[str, float]:
+        """Evaluate on all corruption types"""
+        corruption_results = {}
+        
+        for corruption_name, loader in self.corruption_test_loaders.items():
+            self.model.eval()
+            correct = 0
+            total = 0
+            
+            with torch.no_grad():
+                for images, labels, _ in loader:  # Ignoring metadata for now
+                    images = images.to(self.device)
+                    labels = labels.to(self.device)
+                    
+                    outputs = self.model(images)
+                    pred = outputs.argmax(dim=1)
+                    correct += pred.eq(labels).sum().item()
+                    total += labels.size(0)
+            
+            accuracy = 100. * correct / total
+            corruption_results[corruption_name] = accuracy
+        
+        return corruption_results
+    
     def train(self, epochs: int, save_dir: str) -> Dict:
         """Train the model"""
         os.makedirs(save_dir, exist_ok=True)
@@ -155,6 +195,9 @@ class CIFAR10CTrainer:
             # Evaluation
             test_loss, test_acc, clean_acc, corrupted_acc = self.evaluate(self.test_loader, "Test")
             
+            # Evaluate individual corruptions
+            corruption_results = self.evaluate_corruptions()
+            
             # Track metrics
             self.train_losses.append(train_loss)
             self.test_losses.append(test_loss)
@@ -162,6 +205,19 @@ class CIFAR10CTrainer:
             self.test_accuracies.append(test_acc)
             self.clean_accuracies.append(clean_acc)
             self.corrupted_accuracies.append(corrupted_acc)
+            
+            # Track individual corruption results
+            for corruption_name, acc in corruption_results.items():
+                self.corruption_accuracies[corruption_name].append(acc)
+            
+            # Calculate robustness metrics
+            mean_corruption_acc = np.mean(list(corruption_results.values())) if corruption_results else corrupted_acc
+            robustness_gap = clean_acc - mean_corruption_acc
+            
+            robustness_metrics = {
+                'mean_corruption_acc': mean_corruption_acc,
+                'robustness_gap': robustness_gap
+            }
             
             # Save best model
             if test_acc > best_test_acc:
@@ -173,6 +229,29 @@ class CIFAR10CTrainer:
             if epoch % 10 == 0 or epoch == epochs - 1:
                 print(f"Epoch {epoch:3d}: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
                       f"Test Acc: {test_acc:.2f}%, Clean: {clean_acc:.2f}%, Corrupted: {corrupted_acc:.2f}%")
+                if corruption_results:
+                    print(f"  Mean Corruption Acc: {mean_corruption_acc:.2f}%, Robustness Gap: {robustness_gap:.2f}%")
+            
+            # WandB logging
+            if self.wandb_logger:
+                metrics = {
+                    'epoch': epoch,
+                    'train_loss': train_loss,
+                    'test_loss': test_loss,
+                    'train_acc': train_acc,
+                    'test_acc': test_acc,
+                    'clean_acc': clean_acc,
+                    'corrupted_acc': corrupted_acc
+                }
+                
+                # Add individual corruption results
+                for corruption_name, acc in corruption_results.items():
+                    metrics[f'corruption_{corruption_name}_acc'] = acc
+                
+                # Add robustness metrics
+                metrics.update(robustness_metrics)
+                
+                self.wandb_logger.log_epoch_metrics(**metrics)
         
         print(f"\nBest test accuracy: {best_test_acc:.2f}% at epoch {best_epoch}")
         
@@ -183,12 +262,14 @@ class CIFAR10CTrainer:
             'final_test_acc': self.test_accuracies[-1],
             'final_clean_acc': self.clean_accuracies[-1],
             'final_corrupted_acc': self.corrupted_accuracies[-1],
+            'final_robustness_metrics': robustness_metrics,
             'train_losses': self.train_losses,
             'test_losses': self.test_losses,
             'train_accuracies': self.train_accuracies,
             'test_accuracies': self.test_accuracies,
             'clean_accuracies': self.clean_accuracies,
-            'corrupted_accuracies': self.corrupted_accuracies
+            'corrupted_accuracies': self.corrupted_accuracies,
+            'corruption_accuracies': self.corruption_accuracies
         }
         
         with open(os.path.join(save_dir, 'results.json'), 'w') as f:
@@ -236,7 +317,7 @@ class CIFAR10CTrainer:
         plotter.save_metrics_json(metrics, 'robustness_metrics.json')
 
 
-def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
+def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader, DataLoader, Dict[str, DataLoader]]:
     """Create data loaders from saved dataset"""
     # Load dataset
     train_dataset, test_dataset, metadata = load_cifar10c_dataset(data_dir)
@@ -340,7 +421,15 @@ def create_data_loaders(data_dir: str, batch_size: int = 32) -> Tuple[DataLoader
         shuffle=False
     )
     
-    return train_loader, test_loader
+    # Create corruption loaders (empty for now - will be implemented based on metadata)
+    corruption_loaders = {}
+    if hasattr(metadata, 'corruption_types') or 'corruption_types' in metadata:
+        corruption_types = metadata.get('corruption_types', []) if isinstance(metadata, dict) else getattr(metadata, 'corruption_types', [])
+        # For now, return empty loaders - this will be enhanced to load individual corruption datasets
+        for corruption_type in corruption_types:
+            corruption_loaders[corruption_type] = test_loader  # Placeholder
+    
+    return train_loader, test_loader, corruption_loaders
 
 
 def main():
@@ -380,13 +469,40 @@ def main():
     
     # Create data loaders
     print("\nLoading dataset...")
-    train_loader, test_loader = create_data_loaders(args.data_dir, args.batch_size)
+    train_loader, test_loader, corruption_loaders = create_data_loaders(args.data_dir, args.batch_size)
     print(f"Train batches: {len(train_loader)}")
     print(f"Test batches: {len(test_loader)}")
+    print(f"Corruption datasets: {list(corruption_loaders.keys())}")
     
     # Create model
-    model = create_cifar_robustness_model(model_type='cifar10c', num_classes=10, model_size='small')
+    model = create_cifar_robustness_model(model_type='cifar10c', num_classes=10, model_size=args.model_size)
     print(f"Model created with {model.get_num_parameters():,} parameters")
+
+    # Setup WandB if requested
+    wandb_logger = None
+    if args.wandb_project and WANDB_AVAILABLE:
+        config = {
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'learning_rate': args.learning_rate,
+            'weight_decay': args.weight_decay,
+            'model_size': args.model_size,
+            'seed': args.seed,
+            'num_classes': 10,
+            'dataset': 'CIFAR-10-C',
+            'corruption_types': list(corruption_loaders.keys())
+        }
+        
+        wandb_logger = DelayedGeneralizationLogger(
+            project_name=args.wandb_project,
+            experiment_name=args.wandb_name or f"cifar10c_{args.model_size}_{args.seed}",
+            config=config,
+            phenomenon_type='robustness',
+            tags=(args.wandb_tags or []) + ['cifar10c', 'robustness', 'corruption'],
+            notes="CIFAR-10-C robustness experiment studying delayed generalization patterns"
+        )
+        
+        print(f"WandB logging enabled: {args.wandb_project}/{wandb_logger.run.name}")
 
     # Create trainer
     trainer = CIFAR10CTrainer(
@@ -395,7 +511,9 @@ def main():
         test_loader=test_loader,
         device=device,
         learning_rate=args.learning_rate,
-        weight_decay=args.weight_decay
+        weight_decay=args.weight_decay,
+        corruption_test_loaders=corruption_loaders,
+        wandb_logger=wandb_logger
     )
     
     # Train model
@@ -407,6 +525,17 @@ def main():
     print(f"Best test accuracy: {results['best_test_acc']:.2f}%")
     print(f"Final clean accuracy: {results['final_clean_acc']:.2f}%")
     print(f"Final corrupted accuracy: {results['final_corrupted_acc']:.2f}%")
+    
+    # Print corruption results if available
+    if 'corruption_accuracies' in results:
+        print("\nFinal corruption-specific accuracies:")
+        for corruption_type, accuracies in results['corruption_accuracies'].items():
+            if accuracies:
+                print(f"  {corruption_type}: {accuracies[-1]:.2f}%")
+    
+    # Save experiment summary to WandB
+    if wandb_logger:
+        wandb_logger.save_experiment_summary(results)
 
 
 if __name__ == "__main__":
