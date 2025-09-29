@@ -303,14 +303,15 @@ def apply_corruption(image: np.ndarray, corruption_type: str, severity: int = 3)
         return np.clip(image + noise, 0, 1)
         
     elif corruption_type == 'motion_blur':
-        from scipy import ndimage
+        # Simple motion blur without scipy
         c = [3, 5, 7, 9, 11][severity - 1]
-        kernel = np.zeros((c, c))
-        kernel[c//2, :] = 1 / c
         
-        blurred = np.zeros_like(image)
-        for i in range(3):
-            blurred[:, :, i] = ndimage.convolve(image[:, :, i], kernel)
+        # Simple blur by averaging nearby pixels
+        blurred = np.copy(image)
+        for i in range(1, c):
+            shifted = np.roll(image, i, axis=1)  # horizontal motion blur
+            blurred += shifted
+        blurred /= c
         return blurred
         
     elif corruption_type == 'fog':
