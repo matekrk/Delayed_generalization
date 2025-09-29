@@ -162,7 +162,7 @@ class RealCelebATrainer:
         
         # Learning rate scheduler
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='max', factor=0.5, patience=10, verbose=True
+            self.optimizer, mode='max', factor=0.5, patience=10
         )
         
         # Tracking

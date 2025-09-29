@@ -192,6 +192,11 @@ class BiasedRealCelebADataset(Dataset):
             'original_index': real_idx
         }
         
+        # Validate metadata format for consistency
+        assert isinstance(metadata['bias_followed'], bool), f"bias_followed must be bool, got {type(metadata['bias_followed'])}"
+        assert isinstance(metadata['attr1'], int), f"attr1 must be int, got {type(metadata['attr1'])}"
+        assert isinstance(metadata['attr2'], int), f"attr2 must be int, got {type(metadata['attr2'])}"
+        
         return image, label, metadata
 
 
