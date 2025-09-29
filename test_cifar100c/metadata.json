@@ -1,0 +1,17 @@
+{
+  "train_corruptions": [
+    "gaussian_noise"
+  ],
+  "test_corruptions": [
+    "brightness"
+  ],
+  "train_size": 100,
+  "test_size": 50,
+  "num_classes": 100,
+  "severity_range": [
+    1,
+    5
+  ],
+  "image_size": 32,
+  "seed": 42
+}
