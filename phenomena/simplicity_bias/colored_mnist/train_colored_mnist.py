@@ -20,6 +20,14 @@ import json
 import os
 import sys
 from pathlib import Path
+
+# Add parent directories to path for imports
+repo_root = Path(__file__).parent.parent.parent.parent
+sys.path.append(str(repo_root))
+
+from utils.wandb_integration.delayed_generalization_logger import DelayedGeneralizationLogger
+import sys
+from pathlib import Path
 from typing import Dict, Tuple, List, Optional
 import time
 
@@ -66,13 +74,15 @@ class SimplicityBiasTrainer:
         device: torch.device,
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
-        log_interval: int = 10
+        log_interval: int = 10,
+        wandb_logger: Optional[object] = None
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.device = device
         self.log_interval = log_interval
+        self.wandb_logger = wandb_logger
         
         # Optimizer - Enhanced version with better features
         try:
@@ -400,6 +410,9 @@ def main():
     parser.add_argument("--data_fraction", type=float, default=1.0, 
                        help="Fraction of dataset to use (0.0-1.0, default: 1.0 for full dataset)")
     parser.add_argument("--use_wandb", action="store_true", help="Enable wandb logging")
+    parser.add_argument("--wandb_project", type=str, default="delayed-generalization-colored-mnist", help="WandB project name")
+    parser.add_argument("--wandb_name", type=str, default=None, help="WandB run name")
+    parser.add_argument("--wandb_tags", type=str, nargs='*', default=None, help="WandB tags")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--log_interval", type=int, default=10, help="Logging interval")
     
@@ -419,6 +432,31 @@ def main():
     print(f"Data fraction: {args.data_fraction:.2%}")
     print(f"Use wandb: {args.use_wandb}")
     
+    # Setup wandb logger if requested
+    wandb_logger = None
+    if args.use_wandb:
+        config = {
+            'model_type': args.model_type,
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'learning_rate': args.learning_rate,
+            'weight_decay': args.weight_decay,
+            'dropout': args.dropout,
+            'data_fraction': args.data_fraction,
+            'seed': args.seed
+        }
+        
+        experiment_name = args.wandb_name or f"colored_mnist_{args.model_type}_{args.seed}"
+        wandb_logger = DelayedGeneralizationLogger(
+            project_name=args.wandb_project,
+            experiment_name=experiment_name,
+            config=config,
+            phenomenon_type='simplicity_bias',
+            tags=(args.wandb_tags or []) + ['colored_mnist', 'simplicity_bias'],
+            notes="Colored MNIST simplicity bias experiment studying delayed generalization patterns"
+        )
+        print(f"WandB logging enabled: {args.wandb_project}/{wandb_logger.run.name}")
+    
     # Create data loaders
     train_loader, test_loader, metadata = create_data_loaders(args.data_dir, args.batch_size, args.data_fraction)
     
@@ -437,7 +475,8 @@ def main():
         device=device,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        log_interval=args.log_interval
+        log_interval=args.log_interval,
+        wandb_logger=wandb_logger
     )
     
     # Train model
@@ -466,6 +505,19 @@ def main():
     print(f"Final shape accuracy: {results['final_shape_acc']:.3f}")
     print(f"Best shape accuracy: {results['best_shape_acc']:.3f}")
     print(f"Results saved to: {args.save_dir}")
+    
+    # Final wandb logging
+    if wandb_logger:
+        final_metrics = {
+            'shape_learning_epoch': results['shape_learning_epoch'],
+            'final_test_acc': results['final_test_acc'],
+            'final_color_acc': results['final_color_acc'],
+            'final_shape_acc': results['final_shape_acc'],
+            'best_shape_acc': results['best_shape_acc']
+        }
+        wandb_logger.save_experiment_summary(final_metrics)
+        wandb_logger.finish()
+    
     print("="*70)
 
 

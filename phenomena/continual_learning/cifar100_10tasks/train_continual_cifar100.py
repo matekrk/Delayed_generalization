@@ -741,6 +741,8 @@ def main():
             'total_delayed_generalization_events': len(delayed_events),
             **final_metrics
         })
+        # Finish wandb run with summary and final visualizations
+        wandb_logger.finish()
 
 
 if __name__ == '__main__':

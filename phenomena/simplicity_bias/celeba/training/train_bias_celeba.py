@@ -566,6 +566,19 @@ def main():
     print(f"Best test accuracy: {results['best_test_acc']:.2f}%")
     print(f"Final bias gap: {results['final_bias_conforming_acc'] - results['final_bias_conflicting_acc']:.2f}%")
     
+    # Final wandb logging
+    if args.use_wandb:
+        # Log final summary metrics
+        final_metrics = {
+            'final_test_acc': results['final_test_acc'],
+            'best_test_acc': results['best_test_acc'],
+            'final_bias_conforming_acc': results['final_bias_conforming_acc'],
+            'final_bias_conflicting_acc': results['final_bias_conflicting_acc'],
+            'final_bias_gap': results['final_bias_conforming_acc'] - results['final_bias_conflicting_acc']
+        }
+        wandb.log(final_metrics)
+        wandb.finish()
+    
     # Save metadata with results
     final_metadata = {
         **metadata,

@@ -26,6 +26,7 @@ from typing import Dict, Tuple, List, Optional
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
+from utils.wandb_integration.delayed_generalization_logger import DelayedGeneralizationLogger
 # from data.vision.cifar10c.generate_synthetic_cifar10c import load_synthetic_cifar10c_dataset
 from data.vision.cifar10c.generate_cifar10c import load_cifar10c_dataset
 from data.vision.cifar10c.generate_cifar10c import CIFAR10CDataset
@@ -43,12 +44,14 @@ class CIFAR10CTrainer:
         test_loader: DataLoader,
         device: torch.device,
         learning_rate: float = 1e-3,
-        weight_decay: float = 1e-4
+        weight_decay: float = 1e-4,
+        wandb_logger: Optional[object] = None
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.device = device
+        self.wandb_logger = wandb_logger
         
         # Setup optimizer and loss
         self.optimizer = optim.AdamW(
@@ -369,6 +372,28 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     
+    # Setup wandb logger if requested
+    wandb_logger = None
+    if args.use_wandb:
+        config = {
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'learning_rate': args.learning_rate,
+            'weight_decay': args.weight_decay,
+            'seed': args.seed
+        }
+        
+        experiment_name = args.wandb_name or f"cifar10c_{args.seed}"
+        wandb_logger = DelayedGeneralizationLogger(
+            project_name=args.wandb_project,
+            experiment_name=experiment_name,
+            config=config,
+            phenomenon_type='robustness',
+            tags=(args.wandb_tags or []) + ['cifar10c', 'robustness'],
+            notes="CIFAR-10-C robustness experiment studying delayed generalization patterns"
+        )
+        print(f"WandB logging enabled: {args.wandb_project}/{wandb_logger.run.name}")
+    
     print("Synthetic CIFAR-10-C Training")
     print("=" * 30)
     print(f"Data directory: {args.data_dir}")
@@ -395,7 +420,8 @@ def main():
         test_loader=test_loader,
         device=device,
         learning_rate=args.learning_rate,
-        weight_decay=args.weight_decay
+        weight_decay=args.weight_decay,
+        wandb_logger=wandb_logger
     )
     
     # Train model
@@ -407,6 +433,16 @@ def main():
     print(f"Best test accuracy: {results['best_test_acc']:.2f}%")
     print(f"Final clean accuracy: {results['final_clean_acc']:.2f}%")
     print(f"Final corrupted accuracy: {results['final_corrupted_acc']:.2f}%")
+    
+    # Final wandb logging
+    if wandb_logger:
+        final_metrics = {
+            'best_test_acc': results['best_test_acc'],
+            'final_clean_acc': results['final_clean_acc'],
+            'final_corrupted_acc': results['final_corrupted_acc']
+        }
+        wandb_logger.save_experiment_summary(final_metrics)
+        wandb_logger.finish()
 
 
 if __name__ == "__main__":
