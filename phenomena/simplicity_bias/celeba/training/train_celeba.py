@@ -137,7 +137,7 @@ class CelebATrainer:
             total += labels.size(0)
         
         avg_loss = total_loss / len(self.train_loader)
-        accuracy = 100. * correct / total
+        accuracy = correct / total
         
         return avg_loss, accuracy
     
@@ -172,8 +172,8 @@ class CelebATrainer:
                 spurious_total += labels.size(0)
         
         avg_loss = total_loss / len(loader)
-        accuracy = 100. * correct / total
-        bias_accuracy = 100. * spurious_correct / spurious_total if spurious_total > 0 else 0
+        accuracy = correct / total
+        bias_accuracy = spurious_correct / spurious_total if spurious_total > 0 else 0
         
         return avg_loss, accuracy, bias_accuracy
     
@@ -208,10 +208,10 @@ class CelebATrainer:
             
             # Logging
             if epoch % 10 == 0 or epoch == epochs - 1:
-                print(f"Epoch {epoch:3d}: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
-                      f"Test Acc: {test_acc:.2f}%, Bias Acc: {bias_acc:.2f}%")
+                print(f"Epoch {epoch:3d}: Train Loss: {train_loss:.4f}, Train Acc: {train_acc*100:.2f}%, "
+                      f"Test Acc: {test_acc*100:.2f}%, Bias Acc: {bias_acc*100:.2f}%")
         
-        print(f"\nBest test accuracy: {best_test_acc:.2f}% at epoch {best_epoch}")
+        print(f"\nBest test accuracy: {best_test_acc*100:.2f}% at epoch {best_epoch}")
         
         # Save final results
         results = {
@@ -355,7 +355,7 @@ def main():
     
     print(f"\nTraining completed!")
     print(f"Results saved to: {args.save_dir}")
-    print(f"Best test accuracy: {results['best_test_acc']:.2f}%")
+    print(f"Best test accuracy: {results['best_test_acc']*100:.2f}%")
 
 
 if __name__ == "__main__":

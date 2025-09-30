@@ -106,7 +106,7 @@ class CIFAR100CTrainer:
             total += target.size(0)
         
         avg_loss = total_loss / len(self.train_loader)
-        accuracy = 100. * correct / total
+        accuracy = correct / total
         
         self.train_losses.append(avg_loss)
         self.train_accuracies.append(accuracy)
@@ -133,7 +133,7 @@ class CIFAR100CTrainer:
                 total += target.size(0)
         
         avg_loss = test_loss / len(test_loader)
-        accuracy = 100. * correct / total
+        accuracy = correct / total
         
         return avg_loss, accuracy
     
@@ -217,13 +217,13 @@ class CIFAR100CTrainer:
             # Logging
             if (epoch + 1) % log_interval == 0:
                 print(f'Epoch {epoch+1}/{epochs}:')
-                print(f'  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%')
-                print(f'  Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}%')
+                print(f'  Train Loss: {train_loss:.4f}, Train Acc: {train_acc*100:.2f}%')
+                print(f'  Test Loss: {test_loss:.4f}, Test Acc: {test_acc*100:.2f}%')
                 print(f'  LR: {self.scheduler.get_last_lr()[0]:.6f}')
                 
                 if corruption_results:
-                    print(f'  Mean Corruption Acc: {robustness_metrics.get("mean_corruption_acc", 0):.2f}%')
-                    print(f'  Robustness Gap: {robustness_metrics.get("robustness_gap", 0):.2f}%')
+                    print(f'  Mean Corruption Acc: {robustness_metrics.get("mean_corruption_acc", 0)*100:.2f}%')
+                    print(f'  Robustness Gap: {robustness_metrics.get("robustness_gap", 0)*100:.2f}%')
             
             # WandB logging
             if self.wandb_logger:
@@ -370,11 +370,50 @@ def create_cifar100c_data_loaders(data_dir: str, batch_size: int = 128, num_work
         test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
     
-    # TODO: Add actual CIFAR-100-C corruption loaders when available
-    # For now, we'll use the clean test set as a placeholder
-    corruption_loaders = {
-        'clean': test_loader  # Placeholder - will be replaced with actual corruptions
-    }
+    # Create CIFAR-100-C corruption loaders
+    corruption_loaders = {}
+    
+    # Import CIFAR-100-C dataset classes
+    try:
+        sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+        from data.vision.cifar100c.generate_cifar100c import CIFAR100CDataset, create_cifar100c_datasets
+        
+        # Default corruptions to evaluate
+        corruptions = ['gaussian_noise', 'motion_blur', 'snow', 'brightness', 'contrast']
+        severities = [1, 3, 5]  # Light, medium, severe
+        
+        # Create corruption datasets
+        corruption_datasets = create_cifar100c_datasets(
+            corruptions=corruptions,
+            severities=severities,
+            data_dir=data_dir,
+            train=False,  # Use test set for evaluation
+            seed=42
+        )
+        
+        # Create data loaders for each corruption
+        for corruption_key, corruption_dataset in corruption_datasets.items():
+            corruption_loaders[corruption_key] = DataLoader(
+                corruption_dataset, 
+                batch_size=batch_size, 
+                shuffle=False, 
+                num_workers=num_workers
+            )
+        
+        print(f"Created {len(corruption_loaders)} corruption test loaders")
+        
+    except ImportError as e:
+        print(f"Warning: Could not import CIFAR-100-C corruption datasets: {e}")
+        print("Using clean test set as fallback for corruption evaluation")
+        corruption_loaders = {
+            'clean': test_loader
+        }
+    except Exception as e:
+        print(f"Warning: Error creating corruption loaders: {e}")
+        print("Using clean test set as fallback for corruption evaluation")
+        corruption_loaders = {
+            'clean': test_loader
+        }
     
     return train_loader, test_loader, corruption_loaders
 
@@ -485,12 +524,12 @@ def main():
     print("\n" + "="*60)
     print("EXPERIMENT COMPLETED")
     print("="*60)
-    print(f"Final Test Accuracy: {results['final_test_acc']:.2f}%")
-    print(f"Best Test Accuracy: {results['best_test_acc']:.2f}%")
+    print(f"Final Test Accuracy: {results['final_test_acc']*100:.2f}%")
+    print(f"Best Test Accuracy: {results['best_test_acc']*100:.2f}%")
     
     if results['final_robustness_metrics']:
-        print(f"Mean Corruption Accuracy: {results['final_robustness_metrics'].get('mean_corruption_acc', 0):.2f}%")
-        print(f"Robustness Gap: {results['final_robustness_metrics'].get('robustness_gap', 0):.2f}%")
+        print(f"Mean Corruption Accuracy: {results['final_robustness_metrics'].get('mean_corruption_acc', 0)*100:.2f}%")
+        print(f"Robustness Gap: {results['final_robustness_metrics'].get('robustness_gap', 0)*100:.2f}%")
     
     print(f"Results saved to: {args.save_dir}")
     
