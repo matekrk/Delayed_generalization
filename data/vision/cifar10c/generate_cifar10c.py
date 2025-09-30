@@ -471,12 +471,47 @@ def save_cifar10c_datasets(
     train_datasets: Dict[str, CIFAR10CDataset],
     test_datasets: Dict[str, CIFAR10CDataset],
     metadata: Dict,
-    output_dir: str
+    output_dir: str,
+    wandb_logger: Optional[object] = None
 ):
     """Save CIFAR-10-C datasets to files"""
     output_path = Path(output_dir)
     corrupted_path = output_path / "cifar10c"
     corrupted_path.mkdir(parents=True, exist_ok=True)
+    
+    # Log dataset metadata to wandb if logger is provided
+    if wandb_logger:
+        try:
+            import wandb
+            # Enhanced metadata for wandb logging
+            enhanced_metadata = {
+                **metadata,
+                'output_path': str(corrupted_path),
+                'corruption_count': len(metadata['corruption_types']),
+                'total_train_samples': len(metadata['corruption_types']) * metadata['train_size'],
+                'total_test_samples': len(metadata['corruption_types']) * metadata['test_size'],
+                'dataset_type': 'CIFAR-10-C'
+            }
+            
+            # Log metadata as config update
+            wandb_logger.run.config.update({
+                'dataset_metadata': enhanced_metadata
+            })
+            
+            # Log as artifact
+            artifact = wandb.Artifact(
+                name=f"cifar10c_metadata_severity_{metadata['severity']}",
+                type="dataset_metadata",
+                description=f"CIFAR-10-C dataset metadata for severity {metadata['severity']} with corruptions: {', '.join(metadata['corruption_types'])}"
+            )
+            
+            # Add metadata file to artifact
+            metadata_file = corrupted_path / "metadata.json"
+            
+        except ImportError:
+            print("Warning: wandb not available for metadata logging")
+        except Exception as e:
+            print(f"Warning: Failed to log metadata to wandb: {e}")
     
     # Save datasets with informative subdir
     # corruption_str = "_".join(metadata['corruption_types'])
@@ -498,6 +533,18 @@ def save_cifar10c_datasets(
     # Save metadata
     with open(corrupted_path / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
+    
+    # Complete wandb logging after metadata file is saved
+    if wandb_logger:
+        try:
+            import wandb
+            # Add metadata file to artifact
+            artifact.add_file(str(corrupted_path / "metadata.json"))
+            wandb_logger.run.log_artifact(artifact)
+            
+            print(f"Dataset metadata logged to wandb project: {wandb_logger.run.project}")
+        except Exception as e:
+            print(f"Warning: Failed to complete wandb artifact logging: {e}")
     
     # Create visualizations
     visualize_cifar10c(train_datasets, 5, str(corrupted_path / "train_corruptions.png"))
@@ -635,6 +682,12 @@ def main():
                        help="Corruption severity (1=light, 5=heavy)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--no_download", action="store_true", help="Don't download CIFAR-10")
+    parser.add_argument("--wandb_project", type=str, default=None,
+                       help="WandB project name for logging dataset metadata")
+    parser.add_argument("--wandb_name", type=str, default=None,
+                       help="WandB run name")
+    parser.add_argument("--wandb_tags", type=str, nargs='*', default=None,
+                       help="WandB tags")
     
     args = parser.parse_args()
     
@@ -643,6 +696,36 @@ def main():
     print(f"Corruptions: {args.corruptions}")
     print(f"Severity: {args.severity}")
     print(f"Seed: {args.seed}")
+    
+    # Setup WandB if requested
+    wandb_logger = None
+    if args.wandb_project:
+        try:
+            sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+            from utils.wandb_integration.delayed_generalization_logger import DelayedGeneralizationLogger
+            
+            config = {
+                'corruption_types': args.corruptions,
+                'severity': args.severity,
+                'seed': args.seed,
+                'dataset': 'CIFAR-10-C',
+                'generation_mode': 'dataset_creation'
+            }
+            
+            wandb_logger = DelayedGeneralizationLogger(
+                project_name=args.wandb_project,
+                experiment_name=args.wandb_name or f"cifar10c_generation_severity_{args.severity}",
+                config=config,
+                phenomenon_type='robustness',
+                tags=(args.wandb_tags or []) + ['cifar10c', 'dataset_generation', 'corruption'],
+                notes=f"CIFAR-10-C dataset generation with severity {args.severity} and corruptions: {', '.join(args.corruptions)}"
+            )
+            
+            print(f"WandB logging enabled: {args.wandb_project}/{wandb_logger.run.name}")
+        except ImportError:
+            print("Warning: WandB integration not available")
+        except Exception as e:
+            print(f"Warning: Failed to initialize wandb: {e}")
     
     # Create datasets
     train_datasets, test_datasets, metadata = create_cifar10c_datasets(
@@ -659,7 +742,7 @@ def main():
         test_analysis = analyze_cifar10c_dataset(test_datasets[corruption_type], f"Test ({corruption_type})")
     
     # Save datasets
-    save_cifar10c_datasets(train_datasets, test_datasets, metadata, args.output_dir)
+    save_cifar10c_datasets(train_datasets, test_datasets, metadata, args.output_dir, wandb_logger)
     
     print(f"\nDataset creation completed!")
     print(f"Saved to: {args.output_dir}")
