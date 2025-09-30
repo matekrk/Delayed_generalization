@@ -40,10 +40,10 @@ delayed_generalization/
 │   ├── grokking/
 │   ├── simplicity_bias/
 │   ├── phase_transitions/
-│   └── robustness/     # NEW: Robustness evaluation including adversarial attacks
+│   └── robustness/     # Robustness evaluation including adversarial attacks
 ├── data/           # Datasets known for delayed generalization
 │   ├── algorithmic/
-│   ├── vision/         # NEW: Includes CIFAR-100 and TinyImageNet analysis
+│   ├── vision/         # Includes CIFAR-100 and TinyImageNet analysis
 │   ├── nlp/
 │   └── phase_transitions/
 ├── models/            # Model architectures prone to delayed generalization  
@@ -54,11 +54,11 @@ delayed_generalization/
 │   ├── warmup/
 │   ├── regularization/
 │   └── scheduling/
-├── data_attribution/  # NEW: TRAK and GradCAM for understanding model behavior
+├── data_attribution/  # TRAK and GradCAM for understanding model behavior
 │   ├── trak/
 │   └── gradcam/
-├── utils/            # NEW: Analysis utilities including color analysis
-├── slurm_scripts/    # NEW: Scripts for running on SLURM clusters
+├── utils/            # Analysis utilities including color analysis
+├── slurm_scripts/    # Scripts for running on SLURM clusters
 ├── experiments/      # Reproducible experimental setups
 └── tools/           # Analysis and visualization tools
 ```
@@ -76,7 +76,7 @@ Browse the [catalog of scenarios](./CATALOG.md) or explore specific categories:
 - **[SLURM Scripts](./slurm_scripts/)**: Ready-to-use cluster scripts
 - **[Experiments](./experiments/)**: Reproducible setups and results
 
-## 🔬 New Features
+## 🛠️ Key Capabilities
 
 ### Color Analysis for Bias Detection
 ```python
