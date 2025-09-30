@@ -353,13 +353,13 @@ class ContinualLearningTrainer:
             scheduler.step()
             
             avg_loss = total_loss / len(train_loader)
-            accuracy = 100. * correct / total
+            accuracy = correct / total
             
             task_train_losses.append(avg_loss)
             task_train_accuracies.append(accuracy)
             
             if (epoch + 1) % log_interval == 0:
-                print(f'  Epoch {epoch+1}/{epochs}: Loss: {avg_loss:.4f}, Acc: {accuracy:.2f}%')
+                print(f'  Epoch {epoch+1}/{epochs}: Loss: {avg_loss:.4f}, Acc: {accuracy*100:.2f}%')
         
         # Store task history
         self.task_histories[task_id] = {
@@ -367,7 +367,7 @@ class ContinualLearningTrainer:
             'train_accuracies': task_train_accuracies
         }
         
-        print(f"Task {task_id + 1} training completed. Final accuracy: {accuracy:.2f}%")
+        print(f"Task {task_id + 1} training completed. Final accuracy: {accuracy*100:.2f}%")
     
     def evaluate_all_tasks(self, data_dir: str, batch_size: int = 128) -> Dict[int, float]:
         """Evaluate model on all completed tasks"""
@@ -399,7 +399,7 @@ class ContinualLearningTrainer:
                     
                     total += target.size(0)
             
-            accuracy = 100. * correct / total
+            accuracy = correct / total
             task_accuracies[task_id] = accuracy
             
             # Update task accuracy history
@@ -544,10 +544,10 @@ class ContinualLearningTrainer:
             # Logging
             print(f"\nAfter Task {task_id + 1}:")
             for tid, acc in current_task_accuracies.items():
-                print(f"  Task {tid + 1} Accuracy: {acc:.2f}%")
-            print(f"  Average Accuracy: {cl_metrics.get('average_accuracy', 0):.2f}%")
+                print(f"  Task {tid + 1} Accuracy: {acc*100:.2f}%")
+            print(f"  Average Accuracy: {cl_metrics.get('average_accuracy', 0)*100:.2f}%")
             if 'average_forgetting' in cl_metrics:
-                print(f"  Average Forgetting: {cl_metrics['average_forgetting']:.2f}%")
+                print(f"  Average Forgetting: {cl_metrics['average_forgetting']*100:.2f}%")
             
             # WandB logging
             if self.wandb_logger:
@@ -714,15 +714,15 @@ def main():
     final_accs = results['final_task_accuracies']
     avg_final_acc = np.mean(list(final_accs.values()))
     
-    print(f"Final Average Accuracy: {avg_final_acc:.2f}%")
+    print(f"Final Average Accuracy: {avg_final_acc*100:.2f}%")
     print(f"Final Accuracy per Task:")
     for task_id, acc in final_accs.items():
-        print(f"  Task {task_id + 1}: {acc:.2f}%")
+        print(f"  Task {task_id + 1}: {acc*100:.2f}%")
     
     # Forgetting analysis
     final_metrics = results['continual_learning_metrics'][-1]
     if 'average_forgetting' in final_metrics:
-        print(f"Average Forgetting: {final_metrics['average_forgetting']:.2f}%")
+        print(f"Average Forgetting: {final_metrics['average_forgetting']*100:.2f}%")
     
     # Delayed generalization events
     delayed_events = results['delayed_generalization_events']

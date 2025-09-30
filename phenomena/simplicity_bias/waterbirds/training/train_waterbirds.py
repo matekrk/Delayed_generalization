@@ -172,7 +172,7 @@ class WaterbirdsTrainer:
             total += bird_types.size(0)
         
         avg_loss = total_loss / len(self.train_loader)
-        accuracy = 100. * correct / total
+        accuracy = correct / total
         
         return avg_loss, accuracy
     
@@ -213,14 +213,14 @@ class WaterbirdsTrainer:
                         group_total[g] += group_mask.sum().item()
         
         avg_loss = total_loss / len(loader)
-        accuracy = 100. * correct / total
+        accuracy = correct / total
         
         # Group accuracies
         group_accs = {}
         group_names = ['landbird_water', 'landbird_land', 'waterbird_water', 'waterbird_land']
         for i, name_g in enumerate(group_names):
             if group_total[i] > 0:
-                group_accs[name_g] = 100. * group_correct[i] / group_total[i]
+                group_accs[name_g] = group_correct[i] / group_total[i]
             else:
                 group_accs[name_g] = 0.0
         
@@ -261,12 +261,12 @@ class WaterbirdsTrainer:
             
             # Logging
             if epoch % 10 == 0 or epoch == epochs - 1:
-                print(f"Epoch {epoch:3d}: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
-                      f"Test Acc: {test_acc:.2f}%, Worst Group Acc: {worst_group_acc:.2f}%")
+                print(f"Epoch {epoch:3d}: Train Loss: {train_loss:.4f}, Train Acc: {train_acc*100:.2f}%, "
+                      f"Test Acc: {test_acc*100:.2f}%, Worst Group Acc: {worst_group_acc*100:.2f}%")
                 for group, acc in test_group_accs.items():
-                    print(f"  {group}: {acc:.2f}%")
+                    print(f"  {group}: {acc*100:.2f}%")
         
-        print(f"\nBest worst group accuracy: {best_worst_group_acc:.2f}% at epoch {best_epoch}")
+        print(f"\nBest worst group accuracy: {best_worst_group_acc*100:.2f}% at epoch {best_epoch}")
         
         # Save final results
         results = {
@@ -492,7 +492,7 @@ def main():
     
     print(f"\nTraining completed!")
     print(f"Results saved to: {args.save_dir}")
-    print(f"Best worst group accuracy: {results['best_worst_group_acc']:.2f}%")
+    print(f"Best worst group accuracy: {results['best_worst_group_acc']*100:.2f}%")
 
 
 if __name__ == "__main__":

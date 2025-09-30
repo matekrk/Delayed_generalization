@@ -49,9 +49,3 @@ wandb/
 Thumbs.db
 
 # Test files (for validation only)
-test_fixes.py
-
-# CIFAR-100-C test datasets
-test_cifar*
-*_demo/
-synthetic_cifar100c_demo/
