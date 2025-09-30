@@ -370,11 +370,50 @@ def create_cifar100c_data_loaders(data_dir: str, batch_size: int = 128, num_work
         test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
     
-    # TODO: Add actual CIFAR-100-C corruption loaders when available
-    # For now, we'll use the clean test set as a placeholder
-    corruption_loaders = {
-        'clean': test_loader  # Placeholder - will be replaced with actual corruptions
-    }
+    # Create CIFAR-100-C corruption loaders
+    corruption_loaders = {}
+    
+    # Import CIFAR-100-C dataset classes
+    try:
+        sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+        from data.vision.cifar100c.generate_cifar100c import CIFAR100CDataset, create_cifar100c_datasets
+        
+        # Default corruptions to evaluate
+        corruptions = ['gaussian_noise', 'motion_blur', 'snow', 'brightness', 'contrast']
+        severities = [1, 3, 5]  # Light, medium, severe
+        
+        # Create corruption datasets
+        corruption_datasets = create_cifar100c_datasets(
+            corruptions=corruptions,
+            severities=severities,
+            data_dir=data_dir,
+            train=False,  # Use test set for evaluation
+            seed=42
+        )
+        
+        # Create data loaders for each corruption
+        for corruption_key, corruption_dataset in corruption_datasets.items():
+            corruption_loaders[corruption_key] = DataLoader(
+                corruption_dataset, 
+                batch_size=batch_size, 
+                shuffle=False, 
+                num_workers=num_workers
+            )
+        
+        print(f"Created {len(corruption_loaders)} corruption test loaders")
+        
+    except ImportError as e:
+        print(f"Warning: Could not import CIFAR-100-C corruption datasets: {e}")
+        print("Using clean test set as fallback for corruption evaluation")
+        corruption_loaders = {
+            'clean': test_loader
+        }
+    except Exception as e:
+        print(f"Warning: Error creating corruption loaders: {e}")
+        print("Using clean test set as fallback for corruption evaluation")
+        corruption_loaders = {
+            'clean': test_loader
+        }
     
     return train_loader, test_loader, corruption_loaders
 

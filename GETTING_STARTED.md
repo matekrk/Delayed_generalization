@@ -291,14 +291,21 @@ print(f"Parameters: {sum(p.numel() for p in grokking_model.parameters()):,}")
 ### Robustness on CIFAR-100-C
 
 ```python
-# Quick setup for robustness experiments
-from phenomena.robustness.cifar100c.train_cifar100c import CIFAR100CTrainer, CIFAR100CModel
+# Quick setup for robustness experiments with corrupted data
+from phenomena.robustness.cifar100c.train_cifar100c import CIFAR100CTrainer, create_cifar100c_data_loaders
+from models.vision.cifar_robustness_models import CIFAR100CModel
 
 # Create robust model for corruption evaluation
 robust_model = CIFAR100CModel(num_classes=100, model_size='medium')
 
+# Load clean and corrupted data loaders
+train_loader, test_loader, corruption_loaders = create_cifar100c_data_loaders(
+    data_dir='./cifar100c_data', batch_size=128
+)
+
 print("Robustness model ready for CIFAR-100-C!")
 print(f"Parameters: {sum(p.numel() for p in robust_model.parameters()):,}")
+print(f"Available corruption types: {list(corruption_loaders.keys())}")
 ```
 
 ### Continual Learning on CIFAR-100
@@ -553,13 +560,23 @@ python phenomena/robustness/cifar10c/train_cifar10c.py \
 
 ### CIFAR-100-C (Advanced Robustness)
 
-Study robustness with more classes and complexity:
+Study robustness with more classes and complexity using corrupted CIFAR-100 data:
 
 ```bash
+# Generate CIFAR-100-C corrupted dataset
+python data/vision/cifar100c/generate_cifar100c.py \
+    --corruptions gaussian_noise motion_blur snow brightness contrast \
+    --severities 1 2 3 4 5 --output_dir ./cifar100c_data
+
+# Generate synthetic CIFAR-100-C dataset (alternative for fast experimentation)
+python data/vision/cifar100c/generate_synthetic_cifar100c.py \
+    --train_corruptions gaussian_noise motion_blur \
+    --test_corruptions snow brightness contrast --output_dir ./synthetic_cifar100c_data
+
 # Train on CIFAR-100 with corruption robustness evaluation
 python phenomena/robustness/cifar100c/train_cifar100c.py \
-    --data_dir ./cifar100_data --epochs 200 --use_wandb \
-    --model_size medium --evaluate_corruptions
+    --data_dir ./cifar100c_data --epochs 200 --wandb_project robustness-cifar100c \
+    --model_size medium
 ```
 
 ### Continual Learning (CIFAR-100 → 10 Tasks)
