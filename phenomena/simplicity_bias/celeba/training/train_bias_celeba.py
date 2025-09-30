@@ -31,6 +31,23 @@ from data.vision.celeba.generate_bias_celeba import load_real_celeba_dataset, Bi
 from visualization.bias_analysis import BiasAnalysisPlotter
 
 
+def celeba_collate_fn(batch):
+    """
+    Custom collate function for CelebA dataset that preserves metadata structure.
+    
+    PyTorch's default collate function tries to convert list of dicts into dict of tensors,
+    which breaks our metadata access pattern. This function keeps metadata as a list of dicts.
+    """
+    images, labels, metadata_list = zip(*batch)
+    
+    # Convert to tensors
+    images = torch.stack(images, dim=0)
+    labels = torch.tensor(labels)
+    
+    # Keep metadata as list of dicts (don't collate)
+    return images, labels, list(metadata_list)
+
+
 class RealCelebAModel(nn.Module):
     """CNN model for real CelebA classification"""
     
@@ -145,7 +162,7 @@ class RealCelebATrainer:
         
         # Learning rate scheduler
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='max', factor=0.5, patience=10, verbose=True
+            self.optimizer, mode='max', factor=0.5, patience=10
         )
         
         # Tracking
@@ -259,6 +276,13 @@ class RealCelebATrainer:
                         attr1_total[attr1_key] += 1
                         attr2_correct[attr2_key] += is_correct
                         attr2_total[attr2_key] += 1
+                    else:
+                        # Debug information if metadata is not a dict
+                        print(f"Warning: metadata at index {i} is not a dict: {type(metadata)} - {metadata}")
+                        # Count as bias conflicting if we can't determine bias
+                        is_correct = pred[i].item() == labels[i].item()
+                        bias_conflicting_correct += is_correct
+                        bias_conflicting_total += 1
         
         avg_loss = total_loss / len(loader)
         accuracy = correct / total
@@ -447,7 +471,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 32, data_fraction: floa
         batch_size=batch_size,
         shuffle=True,
         num_workers=2,
-        pin_memory=True
+        pin_memory=True,
+        collate_fn=celeba_collate_fn
     )
     
     test_loader = DataLoader(
@@ -455,7 +480,8 @@ def create_data_loaders(data_dir: str, batch_size: int = 32, data_fraction: floa
         batch_size=batch_size,
         shuffle=False,
         num_workers=2,
-        pin_memory=True
+        pin_memory=True,
+        collate_fn=celeba_collate_fn
     )
     
     # Update metadata with actual sizes used

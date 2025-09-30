@@ -49,5 +49,3 @@ wandb/
 Thumbs.db
 
 # Test files (for validation only)
-test_fixes.py
-test_accuracy_format.py

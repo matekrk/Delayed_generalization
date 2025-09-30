@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Tuple, List, Optional
 import time
+import wandb
 
 # Add parent directories to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
@@ -66,13 +67,18 @@ class SimplicityBiasTrainer:
         device: torch.device,
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
-        log_interval: int = 10
+        log_interval: int = 10,
+        use_wandb: bool = False,
+        wandb_project: str = "delayed-generalization-colored-mnist",
+        wandb_name: Optional[str] = None,
+        wandb_tags: Optional[List[str]] = None
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.device = device
         self.log_interval = log_interval
+        self.use_wandb = use_wandb
         
         # Optimizer - Enhanced version with better features
         try:
@@ -113,6 +119,22 @@ class SimplicityBiasTrainer:
         self.color_accuracies = []  # Accuracy when predicting based on color
         self.shape_accuracies = []  # Accuracy when predicting based on shape
         self.epochs_logged = []
+        
+        # Initialize wandb if requested
+        if self.use_wandb:
+            wandb.init(
+                project=wandb_project,
+                name=wandb_name or f"colored_mnist_simplicity_bias",
+                config={
+                    "learning_rate": learning_rate,
+                    "weight_decay": weight_decay,
+                    "log_interval": log_interval,
+                    "model_type": type(model).__name__,
+                    "phenomenon": "simplicity_bias",
+                    "dataset": "colored_mnist"
+                },
+                tags=wandb_tags or ["simplicity_bias", "colored_mnist", "delayed_generalization"]
+            )
         
     def compute_accuracy(self, logits: torch.Tensor, targets: torch.Tensor) -> float:
         """Compute classification accuracy"""
@@ -273,6 +295,30 @@ class SimplicityBiasTrainer:
                 self.test_accuracies.append(test_acc)
                 self.color_accuracies.append(color_acc)
                 self.shape_accuracies.append(shape_acc)
+                
+                # Log to wandb
+                if self.use_wandb:
+                    wandb_metrics = {
+                        'epoch': epoch,
+                        'train_loss': train_loss,
+                        'train_accuracy': train_acc,
+                        'test_loss': test_loss,
+                        'test_accuracy': test_acc,
+                        'color_accuracy': color_acc,
+                        'shape_accuracy': shape_acc,
+                        'bias_gap': color_acc - shape_acc,  # Positive when color bias dominates
+                        'best_shape_accuracy': best_shape_acc,
+                        'elapsed_time': elapsed
+                    }
+                    
+                    # Log shape learning detection
+                    if shape_learning_epoch is not None:
+                        wandb_metrics['shape_learning_epoch'] = shape_learning_epoch
+                        wandb_metrics['shape_learning_detected'] = True
+                    else:
+                        wandb_metrics['shape_learning_detected'] = False
+                    
+                    wandb.log(wandb_metrics)
         
         # Final results
         results = {
@@ -301,6 +347,21 @@ class SimplicityBiasTrainer:
             
             # Plot training curves
             self.plot_training_curves(save_dir)
+        
+        # Log final results to wandb
+        if self.use_wandb:
+            final_metrics = {
+                'final/shape_learning_epoch': shape_learning_epoch or -1,
+                'final/train_accuracy': train_acc,
+                'final/test_accuracy': test_acc,
+                'final/color_accuracy': color_acc,
+                'final/shape_accuracy': shape_acc,
+                'final/best_shape_accuracy': best_shape_acc,
+                'final/final_bias_gap': color_acc - shape_acc,
+                'final/total_epochs': len(self.epochs_logged)
+            }
+            wandb.log(final_metrics)
+            wandb.finish()
         
         return results
     
@@ -400,6 +461,12 @@ def main():
     parser.add_argument("--data_fraction", type=float, default=1.0, 
                        help="Fraction of dataset to use (0.0-1.0, default: 1.0 for full dataset)")
     parser.add_argument("--use_wandb", action="store_true", help="Enable wandb logging")
+    parser.add_argument("--wandb_project", type=str, default="delayed-generalization-colored-mnist", 
+                       help="WandB project name")
+    parser.add_argument("--wandb_name", type=str, default=None, 
+                       help="WandB run name (auto-generated if not provided)")
+    parser.add_argument("--wandb_tags", type=str, nargs='*', default=None, 
+                       help="WandB tags (space-separated)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--log_interval", type=int, default=10, help="Logging interval")
     
@@ -437,7 +504,11 @@ def main():
         device=device,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        log_interval=args.log_interval
+        log_interval=args.log_interval,
+        use_wandb=args.use_wandb,
+        wandb_project=args.wandb_project,
+        wandb_name=args.wandb_name,
+        wandb_tags=args.wandb_tags
     )
     
     # Train model
@@ -452,6 +523,11 @@ def main():
     print(f"  Weight decay: {args.weight_decay}")
     print(f"  Train correlation: {metadata['train_correlation']}")
     print(f"  Test correlation: {metadata['test_correlation']}")
+    print(f"  Use wandb: {args.use_wandb}")
+    if args.use_wandb:
+        print(f"  WandB project: {args.wandb_project}")
+        print(f"  WandB name: {args.wandb_name or 'auto-generated'}")
+        print(f"  WandB tags: {args.wandb_tags or ['simplicity_bias', 'colored_mnist', 'delayed_generalization']}")
     print("="*70)
     
     results = trainer.train(args.epochs, args.save_dir)
