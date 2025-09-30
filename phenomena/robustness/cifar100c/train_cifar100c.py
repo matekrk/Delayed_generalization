@@ -536,6 +536,8 @@ def main():
     # Final WandB logging
     if wandb_logger:
         wandb_logger.save_experiment_summary(results)
+        # Finish wandb run with summary and final visualizations
+        wandb_logger.finish()
 
 
 if __name__ == '__main__':

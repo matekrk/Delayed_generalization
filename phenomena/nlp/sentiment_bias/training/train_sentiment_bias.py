@@ -535,6 +535,19 @@ def main():
     print(f"Final bias conforming accuracy: {results['final_bias_conforming_acc']:.2f}%")
     print(f"Final bias conflicting accuracy: {results['final_bias_conflicting_acc']:.2f}%")
     print(f"Results saved to: {full_save_dir}")
+    
+    # Final wandb logging
+    if args.use_wandb:
+        # Log final summary metrics
+        final_metrics = {
+            'final_test_acc': results['final_test_acc'],
+            'best_test_acc': results['best_test_acc'],
+            'final_bias_conforming_acc': results['final_bias_conforming_acc'],
+            'final_bias_conflicting_acc': results['final_bias_conflicting_acc'],
+            'final_bias_gap': results['final_bias_conforming_acc'] - results['final_bias_conflicting_acc']
+        }
+        wandb.log(final_metrics)
+        wandb.finish()
 
 
 if __name__ == "__main__":

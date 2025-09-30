@@ -58,6 +58,7 @@ class CIFAR10CTrainer:
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.device = device
+
         self.corruption_test_loaders = corruption_test_loaders or {}
         self.wandb_logger = wandb_logger
         
@@ -533,6 +534,28 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     
+    # Setup wandb logger if requested
+    wandb_logger = None
+    if args.use_wandb:
+        config = {
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'learning_rate': args.learning_rate,
+            'weight_decay': args.weight_decay,
+            'seed': args.seed
+        }
+        
+        experiment_name = args.wandb_name or f"cifar10c_{args.seed}"
+        wandb_logger = DelayedGeneralizationLogger(
+            project_name=args.wandb_project,
+            experiment_name=experiment_name,
+            config=config,
+            phenomenon_type='robustness',
+            tags=(args.wandb_tags or []) + ['cifar10c', 'robustness'],
+            notes="CIFAR-10-C robustness experiment studying delayed generalization patterns"
+        )
+        print(f"WandB logging enabled: {args.wandb_project}/{wandb_logger.run.name}")
+    
     print("Synthetic CIFAR-10-C Training")
     print("=" * 30)
     print(f"Data directory: {args.data_dir}")
@@ -597,20 +620,30 @@ def main():
     
     print(f"\nTraining completed!")
     print(f"Results saved to: {args.save_dir}")
+
     print(f"Best test accuracy: {results['best_test_acc']*100:.2f}%")
     print(f"Final clean accuracy: {results['final_clean_acc']*100:.2f}%")
     print(f"Final corrupted accuracy: {results['final_corrupted_acc']*100:.2f}%")
     
-    # Print corruption results if available
-    if 'corruption_accuracies' in results:
-        print("\nFinal corruption-specific accuracies:")
-        for corruption_type, accuracies in results['corruption_accuracies'].items():
-            if accuracies:
-                print(f"  {corruption_type}: {accuracies[-1]:.2f}%")
-    
-    # Save experiment summary to WandB
+    # Final wandb logging
     if wandb_logger:
-        wandb_logger.save_experiment_summary(results)
+        final_metrics = {
+            'best_test_acc': results['best_test_acc'],
+            'final_clean_acc': results['final_clean_acc'],
+            'final_corrupted_acc': results['final_corrupted_acc']
+        }
+        wandb_logger.save_experiment_summary(final_metrics)
+        wandb_logger.finish()
+    
+        # I think it is not used anymore
+        # # Print corruption results if available
+        # if 'corruption_accuracies' in results:
+            # print("\nFinal corruption-specific accuracies:")
+            # for corruption_type, accuracies in results['corruption_accuracies'].items():
+                # if accuracies:
+                    # print(f"  {corruption_type}: {accuracies[-1]:.2f}%")
+
+
 
 
 if __name__ == "__main__":
