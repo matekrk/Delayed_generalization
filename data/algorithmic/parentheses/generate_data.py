@@ -347,7 +347,7 @@ def main():
     parser.add_argument("--length", type=int, default=10, 
                        help="Sequence length")
     parser.add_argument("--n_types", type=int, default=1, choices=[1, 2, 3, 4],
-                       help="Number of bracket types (1=(), 2=()[], 3=()[]{}, 4=()[]{}<<>>)")
+                       help="Number of bracket types (1=(), 2=()[], 3=()[]{}, 4=()[]{}<>)")
     parser.add_argument("--n_samples", type=int, default=10000,
                        help="Total number of samples to generate")
     parser.add_argument("--train_fraction", type=float, default=0.5,

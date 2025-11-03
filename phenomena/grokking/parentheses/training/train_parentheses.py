@@ -23,6 +23,7 @@ import json
 import matplotlib.pyplot as plt
 import os
 import sys
+import math
 from pathlib import Path
 from typing import Dict, Tuple, List, Optional
 import time
@@ -86,7 +87,6 @@ class ParenthesesClassifier(nn.Module):
     
     def _create_positional_encoding(self, max_len: int, d_model: int):
         """Create fixed positional encoding"""
-        import math
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * 
@@ -116,8 +116,6 @@ class ParenthesesClassifier(nn.Module):
         Returns:
             Logits of shape [batch_size, n_classes]
         """
-        import math
-        
         # Embedding and positional encoding
         embedded = self.embedding(x) * math.sqrt(self.d_model)
         
