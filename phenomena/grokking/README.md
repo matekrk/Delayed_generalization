@@ -32,13 +32,20 @@
 - **Model**: 1-2 layer transformers with attention
 - **Timeline**: 1,000 - 10,000 epochs for generalization
 
-### 2. Permutation Groups  
+### 2. Parentheses Matching
+- **Tasks**: Equal count and nested bracket validation
+- **Typical Setup**: Sequences of 10-16 brackets, binary classification
+- **Model**: 2-layer transformer encoder with classification head
+- **Timeline**: 1,000 - 5,000 epochs for generalization
+- **Variants**: 1-4 bracket types for varying complexity
+
+### 3. Permutation Groups  
 - **Tasks**: Group composition operations
 - **Typical Setup**: Symmetric groups S_n
 - **Model**: Transformer architectures
 - **Timeline**: 5,000+ epochs typical
 
-### 3. Polynomial Evaluation
+### 4. Polynomial Evaluation
 - **Tasks**: Evaluating polynomials over finite fields
 - **Model**: Small transformers
 - **Observation**: Similar memorization → generalization pattern
@@ -88,6 +95,7 @@ max_epochs = 10000
 
 ### Datasets
 - [`modular_arithmetic/`](./modular_arithmetic/) - Standard grokking datasets
+- [`parentheses/`](./parentheses/) - Bracket matching tasks (equal count & nested)
 - [`permutation_groups/`](./permutation_groups/) - Group theory tasks
 - [`polynomial_evaluation/`](./polynomial_evaluation/) - Finite field operations
 

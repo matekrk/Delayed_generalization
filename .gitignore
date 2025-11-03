@@ -34,6 +34,11 @@ experiments/
 outputs/
 logs/
 wandb/
+*_results/
+grokking_results/
+parentheses_results/
+modular_arithmetic_data/
+parentheses_data/
 
 # Jupyter
 .ipynb_checkpoints
