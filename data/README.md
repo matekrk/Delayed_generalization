@@ -7,6 +7,7 @@ This directory contains documentation and resources for data commonly used to st
 ### [Algorithmic](./algorithmic/)
 Mathematical and algorithmic tasks where delayed generalization patterns are well-studied
 - **Modular Arithmetic**: Addition, multiplication, division modulo prime numbers
+- **Parentheses Matching**: Equal count and nested bracket validation tasks
 - **Group Operations**: Permutation groups, symmetry operations
 - **Sequence Tasks**: Copying, reversal, sorting algorithms
 - **Graph Problems**: Shortest path, connectivity, coloring
@@ -68,6 +69,7 @@ When choosing data for delayed generalization research, consider:
 | Dataset | Domain | Phenomenon | Train/Test Split | Typical Timeline |
 |---------|--------|------------|------------------|------------------|
 | Modular Addition | Algorithmic | Grokking | 50/50 | 1000-10000 epochs |
+| Parentheses Matching | Algorithmic | Grokking | 50/50 | 1000-5000 epochs |
 | Waterbirds | Vision | Simplicity Bias | Standard + group | 100-300 epochs |
 | Colored MNIST | Vision | Simplicity Bias | Custom color split | 50-500 epochs |
 | Permutation Groups | Algorithmic | Grokking | 50/50 | 5000+ epochs |
